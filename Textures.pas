@@ -25,15 +25,16 @@ unit Textures;
 interface
 
 uses
-  Windows, OpenGL12, Graphics, Classes, JPEG, SysUtils;
+  Windows, OpenGL, Graphics, Classes, JPEG, SysUtils;
 
 function initLocking : boolean;
 function LoadQuakeTexture(path, name : string; var Texture : GLUINT; NoPicMip, NoMipMap : boolean) : boolean;
-function LoadTGATexture(Filename: String; var Texture: GLuint; LoadFromResource, NoPicMip, NoMipMap : Boolean): Boolean;
+function LoadTGATexture(Filename: String; var Texture: GLuint; LoadFromResource, LoadFromStream, NoPicMip, NoMipMap : Boolean): Boolean;
+function LoadTexture(Filename: String; var Texture: GLuint; LoadFromRes, LoadFromStream : Boolean): Boolean; overload;
 
 implementation
 
-uses Dialogs;
+uses Dialogs, global, Q3Pk3Read;
 
 // Swap bitmap format from BGR to RGB
 procedure SwapRGB(data : Pointer; Size : Integer);
@@ -86,7 +87,7 @@ end;
 {------------------------------------------------------------------}
 {  Load BMP textures                                               }
 {------------------------------------------------------------------}
-function LoadBMPTexture(Filename: String; var Texture : GLuint; LoadFromResource, NoPicMip, NoMipMap : Boolean) : Boolean;
+function LoadBMPTexture(Filename: String; var Texture : GLuint; LoadFromResource, LoadFromStream, NoPicMip, NoMipMap : Boolean) : Boolean;
 var
   FileHeader: BITMAPFILEHEADER;
   InfoHeader: BITMAPINFOHEADER;
@@ -184,7 +185,7 @@ end;
 {------------------------------------------------------------------}
 {  Load JPEG textures                                              }
 {------------------------------------------------------------------}
-function LoadJPGTexture(Filename: String; var Texture: GLuint; LoadFromResource, NoPicMip, NoMipMap : Boolean): Boolean;
+function LoadJPGTexture(Filename: String; var Texture: GLuint; LoadFromResource, LoadFromStream, NoPicMip, NoMipMap : Boolean): Boolean;
 var
   Data : Array of LongWord;
   W, Width : Integer;
@@ -194,6 +195,7 @@ var
   C : LongWord;
   Line : ^LongWord;
   ResStream : TResourceStream;      // used for loading from resource
+  pk3: TPk3Colection;
 begin
   result :=FALSE;
   JPG:=TJPEGImage.Create;
@@ -220,7 +222,14 @@ begin
   else
   begin
     try
-      JPG.LoadFromFile(Filename);
+      if LoadFromStream then
+        begin
+          pk3 := Pk3Zip.IndexOf(Filename);
+          if pk3.ItemIndex <> -1 then
+            JPG.LoadFromStream(Pk3Zip.ReadFileInPK3(pk3, pk3.Items[pk3.ItemIndex].Full));
+        end
+        else
+          JPG.LoadFromFile(Filename);
     except
       MessageBox(0, PChar('Couldn''t load JPG - "'+ Filename +'"'), PChar('BMP Unit'), MB_OK);
       Exit;
@@ -258,7 +267,7 @@ end;
 {------------------------------------------------------------------}
 {  Loads 24 and 32bpp (alpha channel) TGA textures                 }
 {------------------------------------------------------------------}
-function LoadTGATexture(Filename: String; var Texture: GLuint; LoadFromResource, NoPicMip, NoMipMap : Boolean): Boolean;
+function LoadTGATexture(Filename: String; var Texture: GLuint; LoadFromResource, LoadFromStream, NoPicMip, NoMipMap : Boolean): Boolean;
 var
   TGAHeader : packed record   // Header type for TGA images
     FileType     : Byte;
@@ -288,6 +297,8 @@ var
   Temp: Byte;
 
   ResStream : TResourceStream;      // used for loading from resource
+  pk3: TPk3Colection;
+  memory: TMemoryStream;
 
   // Copy a pixel from source to dest and Swap the RGB color values
   procedure CopySwapPixel(const Source, Destination : Pointer);
@@ -337,6 +348,15 @@ begin
       BlockRead(TGAFile, TGAHeader, SizeOf(TGAHeader));
       result :=TRUE;
     end
+    else
+    if LoadFromStream then
+      begin
+        pk3 := Pk3Zip.IndexOf(Filename);
+          if pk3.ItemIndex <> -1 then
+            memory := Pk3Zip.ReadFileInPK3(pk3, pk3.Items[pk3.ItemIndex].Full);
+        memory.ReadBuffer(TGAHeader, SizeOf(TGAHeader));
+        result :=TRUE;
+      end
     else
     begin
       MessageBox(0, PChar('File not found  - ' + Filename), PChar('TGA Texture'), MB_OK);
@@ -397,7 +417,13 @@ begin
       end
       else         // Read in the image from file
       begin
-        BlockRead(TGAFile, image^, ImageSize, bytesRead);
+        if LoadFromStream then
+          begin
+            bytesRead := memory.Read(image^, ImageSize);
+            //bytesRead := length(image^);
+          end
+        else
+          BlockRead(TGAFile, image^, ImageSize, bytesRead);
         if bytesRead <> ImageSize then
         begin
           Result := False;
@@ -456,9 +482,25 @@ begin
       end
       else
       begin
-        GetMem(CompImage, FileSize(TGAFile)-sizeOf(TGAHeader));
-        BlockRead(TGAFile, CompImage^, FileSize(TGAFile)-sizeOf(TGAHeader), BytesRead);   // load compressed data into memory
-        if bytesRead <> FileSize(TGAFile)-sizeOf(TGAHeader) then
+        if LoadFromStream then
+          begin
+            GetMem(CompImage, memory.Size-sizeOf(TGAHeader));
+            bytesRead := memory.Read(CompImage^, memory.Size-sizeOf(TGAHeader));
+            //bytesRead := length(image^);
+          end
+        else
+          begin
+            GetMem(CompImage, FileSize(TGAFile)-sizeOf(TGAHeader));
+            BlockRead(TGAFile, CompImage^, FileSize(TGAFile)-sizeOf(TGAHeader), BytesRead);   // load compressed data into memory
+          end;
+        if LoadFromStream and (bytesRead <> memory.Size-sizeOf(TGAHeader)) then
+        begin
+          Result := False;
+          memory.Free;
+          MessageBox(0, PChar('Couldn''t read file "'+ Filename +'".'), PChar('TGA File Error'), MB_OK);
+          Exit;
+        end
+        else if not LoadFromStream and (bytesRead <> FileSize(TGAFile)-sizeOf(TGAHeader)) then
         begin
           Result := False;
           CloseFile(TGAFile);
@@ -504,7 +546,10 @@ begin
     end;
 
     Result := TRUE;
-    CloseFile(TGAFile);
+    if LoadFromStream then
+      memory.Free
+    else
+      CloseFile(TGAFile);
     try
       FreeMem(Image);
     except
@@ -517,16 +562,16 @@ end;
 {------------------------------------------------------------------}
 {  Determines file type and sends to correct function              }
 {------------------------------------------------------------------}
-function LoadTexture(Filename: String; var Texture : GLuint; LoadFromRes, NoPicMip, NoMipMap : Boolean) : Boolean;
+function LoadTexture(Filename: String; var Texture : GLuint; LoadFromRes, LoadFromStream, NoPicMip, NoMipMap : Boolean) : Boolean; overload;
 begin
   result := false;
 //  ShowMessage(FileName);
   if copy(Uppercase(filename), length(filename)-3, 4) = '.BMP' then
-    result :=LoadBMPTexture(Filename, Texture, LoadFromRes, NoPicMip, NoMipMap);
+    result :=LoadBMPTexture(Filename, Texture, LoadFromRes, LoadFromStream, NoPicMip, NoMipMap);
   if copy(Uppercase(filename), length(filename)-3, 4) = '.JPG' then
-    result := LoadJPGTexture(Filename, Texture, LoadFromRes, NoPicMip, NoMipMap);
+    result := LoadJPGTexture(Filename, Texture, LoadFromRes, LoadFromStream, NoPicMip, NoMipMap);
   if copy(Uppercase(filename), length(filename)-3, 4) = '.TGA' then
-    result := LoadTGATexture(Filename, Texture, LoadFromRes, NoPicMip, NoMipMap);
+    result := LoadTGATexture(Filename, Texture, LoadFromRes, LoadFromStream, NoPicMip, NoMipMap);
 
   if result = false then
     ShowMessage(filename);  
@@ -545,31 +590,168 @@ begin
     result := false;
 end;
 
-function LoadQuakeTexture(path, name : string; var Texture : GLUINT;  NoPicMip, NoMipMap : boolean) : boolean;
-var ext, fullname : string;
+function LoadTextureFromStream(Stream: TStream; var Texture: GLuint; NoPicMip, NoMipMap : Boolean): Boolean;
+var
+  FileHeader: BITMAPFILEHEADER;
+  InfoHeader: BITMAPINFOHEADER;
+  Palette: array of RGBQUAD;
+  BitmapLength: LongWord;
+  PaletteLength: LongWord;
+  Width, Height : Integer;
+  pData : Pointer;
+  p,j,ExpandBMP,Rmask,Gmask,Bmask : Integer;
+  Format : Word;
 begin
-try
-  result := false;
-  ext := ExtractFileExt(name);
-  if (ext <> '.tga') and (ext <> '.jpg') then
-    ext := '';
-
-  if Length(ext) > 0 then
-    name := Copy(name, 1, Length(name)-4); // remove ext
-  fullname := path + name + '.tga';
-  if FileExists(fullname) then
-    result := LoadTexture(fullname, Texture, false,  NoPicMip, NoMipMap)
-  else begin
-    fullname := path + name + '.jpg';
-    if FileExists(fullname) then
-      result := LoadTexture(fullname, Texture, false, NoPicMip, NoMipMap)
-    else
-      Texture := 0;
+  Stream.Position := 0;
+  Stream.ReadBuffer(FileHeader, SizeOf(FileHeader));  // FileHeader
+  Stream.ReadBuffer(InfoHeader, SizeOf(InfoHeader));  // InfoHeader
+  PaletteLength := InfoHeader.biClrUsed;
+  case InfoHeader.biBitCount of
+  1,4:
+   begin
+    ExpandBMP := InfoHeader.biBitCount;
+    InfoHeader.biBitCount := 8;
+   end;
+   else
+    ExpandBMP := 0;
+   end;
+  case InfoHeader.biCompression of
+  0: // BI_RGB
+      begin
+        case InfoHeader.biBitCount of
+        15,16: begin Rmask := $7c00; GMask := $03e0; BMask := $001f; end;
+        // assuming big endian
+        24: begin Rmask := $ff; GMask := $ff00; Bmask := $ff0000; end;
+        32: begin Rmask := $ff0000; Gmask := $ff00; Bmask := $ff; end;
+        end;
+      end;
+  1, // BI_RLE8
+  2: // BI_RLE4
+     raise EInvalidGraphic.create('Compressed Bitmaps not handled');
+  3: // BI_BitFields
+      begin
+        case InfoHeader.biBitCount of
+        15,16,32: begin
+                    Stream.ReadBuffer(Rmask,sizeof(Rmask));
+                    Stream.ReadBuffer(Gmask,sizeof(Gmask));
+                    Stream.ReadBuffer(Bmask,sizeof(Bmask));
+                  end;
+        end;
+      end;
   end;
-except
-  ext := ext;
+  if (InfoHeader.biBitCount=24) then
+    Format := GL_RGB
+  else
+    Format := GL_RGBA;
+
+  SetLength(Palette, PaletteLength);
+  Stream.ReadBuffer(Palette, PaletteLength);          // Palette
+  Width := InfoHeader.biWidth;
+  Height := InfoHeader.biHeight;
+
+  BitmapLength := InfoHeader.biSizeImage;
+  if BitmapLength = 0 then
+     BitmapLength := Width * Height * InfoHeader.biBitCount Div 8;
+  GetMem(pData, BitmapLength);
+  try
+     Stream.ReadBuffer(pData^, BitmapLength);            // Bitmap Data
+  // Bitmaps are stored BGR and not RGB, so swap the R and B bytes.
+    if (Rmask<>$ff0000) then
+        SwapRGB(pData, Width*Height);
+    if (InfoHeader.biBitCount=32) then
+    begin
+      SwapRGB(pData,Width*Height);
+    end;
+    Texture :=CreateTexture(Width, Height, format, pData, NoPicMip, NoMipMap);
+  finally
+    FreeMem(pData);
+  end;
 end;
 
+function LoadQuakeTexture(path, name : string; var Texture : GLUINT;  NoPicMip, NoMipMap : boolean) : boolean;
+var ext, fullname, s : string; k, i: integer;
+  pk3: TPk3Colection;
+  JPG : TJPEGImage;
+  BMP : TBitmap;
+  Data : Array of LongWord;
+  W, Width : Integer;
+  H, Height : Integer;
+  Line : ^LongWord;
+  C : LongWord;
+begin
+  try
+    result := false;
+    ext := ExtractFileExt(name);
+    if (ext <> '.tga') and (ext <> '.jpg') and (ext <> '.bmp') then
+      ext := '';
+
+    if Length(ext) > 0 then
+      name := Copy(name, 1, Length(name)-4); // remove ext
+
+    k := 0;
+    while k < Pk3Zip.BASE_PATH.count do
+    begin
+      fullname := path + name + '.tga';
+      if FileExists(fullname) then begin
+        result := LoadTexture(fullname, Texture, false, false, NoPicMip, NoMipMap);
+        Break;
+      end;
+      fullname := path + name + '.jpg';
+      if FileExists(fullname) then begin
+        result := LoadTexture(fullname, Texture, false, false, NoPicMip, NoMipMap);
+        Break;
+      end;
+      fullname := path + name + '.bmp';
+      if FileExists(fullname) then begin
+        result := LoadTexture(fullname, Texture, false, false, NoPicMip, NoMipMap);
+        Break;
+      end;
+
+      // load in pk3 file
+      // for I := 0 to length(Pk3Zip.FILES_IN_PK3) - 1 do
+      fullname := path + name + '.tga';
+      pk3 := Pk3Zip.IndexOf(fullname);
+      if pk3.ItemIndex <> -1 then begin
+        s := 'temps/' + ExtractFileName(pk3.Pk3FileName) + '\' + pk3.Items[pk3.ItemIndex].Full;
+        s := StringReplace(s, '/', '\', [rfReplaceAll]);
+        result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
+        // result := LoadTextureFromStream(Pk3Zip.ReadFileInPK3(pk3, fullname), Texture, NoPicMip, NoMipMap);
+        Break;
+      end;
+      fullname := path + name + '.jpg';
+      pk3 := Pk3Zip.IndexOf(fullname);
+      if pk3.ItemIndex <> -1 then begin
+        result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
+        Break;
+      end;
+      fullname := path + name + '.bmp';
+      pk3 := Pk3Zip.IndexOf(fullname);
+      if pk3.ItemIndex <> -1 then begin
+        result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
+        Break;
+      end;
+
+      path := Pk3Zip.BASE_PATH.Strings[k];
+      inc(k);
+    end;
+    if not Result then
+      Texture := 0;
+  except
+    ext := ext;
+  end;
+end;
+
+{------------------------------------------------------------------}
+{  Determines file type and sends to correct function              }
+{------------------------------------------------------------------}
+function LoadTexture(Filename: String; var Texture : GLuint; LoadFromRes, LoadFromStream : Boolean) : Boolean;
+begin
+  if copy(Uppercase(filename), length(filename)-3, 4) = '.BMP' then
+    LoadBMPTexture(Filename, Texture, LoadFromRes, LoadFromStream, false, false);
+  if copy(Uppercase(filename), length(filename)-3, 4) = '.JPG' then
+    LoadJPGTexture(Filename, Texture, LoadFromRes, LoadFromStream, false, false);
+  if copy(Uppercase(filename), length(filename)-3, 4) = '.TGA' then
+    LoadTGATexture(Filename, Texture, LoadFromRes, LoadFromStream, false, false);
 end;
 
 end.

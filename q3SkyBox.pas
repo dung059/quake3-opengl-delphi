@@ -2,7 +2,7 @@ unit q3SkyBox;
 
 interface
 
-uses OpenGL12, q3types;
+uses OpenGL, q3types;
 
 const
   SKY_SEQGS: integer = 180;
@@ -165,7 +165,7 @@ begin
 end;
 
 procedure TSkybox.DrawBox(pos : TVector3f);
-var px,py,pz : TGLFloat;
+var px,py,pz : GLFloat;
     dov : single;
 begin
   if FList = -1 then begin

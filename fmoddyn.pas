@@ -3,19 +3,19 @@
 { =========================================================================================== }
 {
   NOTE: For the demos to run you must have either fmod.dll (in Windows)
-  or libfmod-3.71.so (in Linux) installed.
+  or libfmod-3.75.so (in Linux) installed.
 
   In Windows, copy the fmod.dll file found in the api directory to either of
   the following locations (in order of preference)
   - your application directory
   - Windows\System (95/98) or WinNT\System32 (NT/2000/XP)
 
-  In Linux, make sure you are signed in as root and copy the libfmod-3.71.so
+  In Linux, make sure you are signed in as root and copy the libfmod-3.75.so
   file from the api directory to your /usr/lib/ directory.
   Then via a command line, navigate to the /usr/lib/ directory and create
-  a symbolic link between libfmod-3.71.so and libfmod.so. This is done with
+  a symbolic link between libfmod-3.75.so and libfmod.so. This is done with
   the following command (assuming you are in /usr/lib/)...
-  ln -s libfmod-3.71.so libfmod.so.
+  ln -s libfmod-3.75.so libfmod.so.
 }
 { =============================================================================================== }
 
@@ -127,8 +127,9 @@ var
   FSOUND_GetOutputRate: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetMaxChannels: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetMaxSamples: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_GetSpeakerMode: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetSFXMasterVolume: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_GetNumHardwareChannels: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_GetNumHWChannels: function (var Num2D: Integer; var Num3D: Integer; var Total: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetChannelsPlaying: function: Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetCPUUsage: function: Single; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetMemoryStats: Procedure (var CurrentAlloced: Cardinal; var MaxAlloced: Cardinal); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
@@ -159,6 +160,7 @@ var
   FSOUND_Sample_SetMode: function (Sptr: PFSoundSample; Mode: Cardinal): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_SetLoopPoints: function (Sptr: PFSoundSample; LoopStart, LoopEnd: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_SetDefaults: function (Sptr: PFSoundSample; DefFreq, DefVol, DefPan, DefPri: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_Sample_SetDefaultsEx: function (Sptr: PFSoundSample; DefFreq, DefVol, DefPan, DefPri, VarFreq, VarVol, VarPan: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_SetMinMaxDistance: function (Sptr: PFSoundSample; Min, Max: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_SetMaxPlaybacks: function (Sptr: PFSoundSample; Max: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
@@ -172,7 +174,9 @@ var
   FSOUND_Sample_GetLength: function (Sptr: PFSoundSample): Cardinal; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_GetLoopPoints: function (Sptr: PFSoundSample; var LoopStart: Integer; var LoopEnd: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_GetDefaults: function (Sptr: PFSoundSample; var DefFreq: Integer; var DefVol: Integer; var DefPan: Integer; var DefPri: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_Sample_GetDefaultsEx: function (Sptr: PFSoundSample; var DefFreq: Integer; var DefVol: Integer; var DefPan: Integer; var DefPri: Integer; var VarFreq: Integer; var VarVol: Integer; var VarPan): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Sample_GetMode: function (Sptr: PFSoundSample): Cardinal; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_Sample_GetMinMaxDistance: function (Sptr: PFSoundSample; var Min: Single; var Max: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
 { ============================ }
 { Channel control functions.   }
@@ -205,6 +209,8 @@ var
   FSOUND_SetPaused: function (Channel: Integer; Paused: ByteBool): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_SetLoopMode: function (Channel: Integer; LoopMode: Cardinal): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_SetCurrentPosition: function (Channel: Integer; Offset: Cardinal): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_SetAttributes: function (Channel: Integer; Pos: PFSoundVector; Vel: PFSoundVector): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_SetMinMaxDistance: function (Channel: Integer; Min: Single; Max: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
 {
   Channel information functions
@@ -214,6 +220,7 @@ var
   FSOUND_IsPlaying: function (Channel: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetFrequency: function (Channel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetVolume: function (Channel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_GetAmplitude: function (Channel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetPan: function (Channel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetSurround: function (Channel: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetMute: function (Channel: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
@@ -224,6 +231,31 @@ var
   FSOUND_GetCurrentPosition: function (Channel: Integer): Cardinal; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetCurrentSample: function (Channel: Integer): PFSoundSample; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_GetCurrentLevels: function (Channel: Integer; L, R: PSingle): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_GetNumSubChannels: function (Channel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_GetSubChannel: function (Channel: Integer; SubChannel: Integer): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_GetAttributes: function (Channel: Integer; Pos: PFSoundVector; Vel: PFSoundVector): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_GetMinMaxDistance: function (Channel: Integer; var Min: Single; var Max: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+
+{ =================== }
+{ 3D sound functions. }
+{ =================== }
+
+{
+    See also 3d sample and channel based functions above.
+    Call FSOUND_Update once a frame to process 3d information.
+}
+
+var
+  FSOUND_3D_Listener_SetCurrent: procedure (current: Integer); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_Listener_SetAttributes: procedure (Pos: PFSoundVector; Vel: PFSoundVector;
+                                               fx: Single; fy: Single; fz: Single;
+                                               tx: Single; ty: Single; tz: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_Listener_GetAttributes: procedure (Pos: PFSoundVector; Vel: PFSoundVector;
+                                               fx: PSingle; fy: PSingle; fz: PSingle;
+                                               tx: PSingle; ty: PSingle; tz: PSingle); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_SetDopplerFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_SetDistanceFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_3D_SetRolloffFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
 { =================== }
 { FX functions.       }
@@ -234,7 +266,7 @@ var
 
     - FX enabled samples can only be played once at a time, not multiple times at once.
     - Sounds have to be created with FSOUND_HW2D or FSOUND_HW3D for this to work.
-    - FSOUND_INIT_ENABLEOUTPUTFX can be used to apply hardware effect processing to the
+    - FSOUND_INIT_ENABLESYSTEMCHANNELFX can be used to apply hardware effect processing to the
       global mixed output of FMOD's software channels.
     - FSOUND_FX_Enable returns an FX handle that you can use to alter fx parameters.
     - FSOUND_FX_Enable can be called multiple times in a row, even on the same FX type,
@@ -245,7 +277,8 @@ var
 }
 
 var
-  FSOUND_FX_Enable: function (Channel: Integer; Fx: Cardinal): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};    { Set bits to enable following fx }
+  FSOUND_FX_Enable: function (Channel: Integer; Fx: TFSoundFXModes): Integer; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};    { Set bits to enable following fx }
+  FSOUND_FX_Disable: function (Channel: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
   FSOUND_FX_SetChorus: function (FXId: Integer; WetDryMix, Depth, Feedback, Frequency: Single; Waveform: Integer; Delay: Single; Phase: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_FX_SetCompressor: function (FXId: Integer; Gain, Attack, Release, Threshold, Ratio, Predelay: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
@@ -256,40 +289,6 @@ var
   FSOUND_FX_SetI3DL2Reverb: function (FXId, Room, RoomHF: Integer; RoomRolloffFactor, DecayTime, DecayHFRatio: Single; Reflections: Integer; ReflectionsDelay: Single; Reverb: Integer; ReverbDelay, Diffusion, Density, HFReference: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_FX_SetParamEQ: function (FXId: Integer; Center, Bandwidth, Gain: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_FX_SetWavesReverb: function (FXId: Integer; InGain, ReverbMix, ReverbTime, HighFreqRTRatio: Single): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-
-{ =================== }
-{ 3D sound functions. }
-{ =================== }
-
-{
-    See also FSOUND_Sample_SetMinMaxDistance (above)
-    Note! FSOUND_3D_Update is now called FSOUND_Update.
-}
-
-var
-  FSOUND_3D_SetDopplerFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_SetDistanceFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_SetRolloffFactor: procedure (Scale: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_SetAttributes: function (Channel: Integer; Pos: PFSoundVector; Vel: PFSoundVector): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_GetAttributes: function (Channel: Integer; Pos: PFSoundVector; Vel: PFSoundVector): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-
-  FSOUND_3D_Listener_SetCurrent: procedure (current: Integer); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_Listener_SetAttributes: procedure (Pos: PFSoundVector;
-    Vel: PFSoundVector;
-    fx: Single;
-    fy: Single;
-    fz: Single;
-    tx: Single;
-    ty: Single;
-    tz: Single); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_3D_Listener_GetAttributes: procedure (Pos: PFSoundVector;
-    Vel: PFSoundVector;
-    fx: PSingle;
-    fy: PSingle;
-    fz: PSingle;
-    tx: PSingle;
-    ty: PSingle;
-    tz: PSingle); {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
 { ========================= }
 { File Streaming functions. }
@@ -343,7 +342,7 @@ var
   FSOUND_Stream_SetSubStreamSentence: function (Stream: PFSoundStream; var sentencelist: Cardinal; numitems: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
                                                 
   FSOUND_Stream_GetNumTagFields: function (Stream: PFSoundStream; var Num: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_Stream_GetTagField: function (Stream: PFSoundStream; Num: Integer; var _Type: TFSoundTagFieldType; var Name: PCHAR; var Value: Pointer; Length: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_Stream_GetTagField: function (Stream: PFSoundStream; Num: Integer; var _Type: TFSoundTagFieldType; var Name: PCHAR; var Value: Pointer; var Length: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_Stream_FindTagField: function (Stream: PFSoundStream; _Type: TFSoundTagFieldType; Name: PChar; var Value: Pointer; var Length: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
   FSOUND_Stream_Net_SetProxy: function (Proxy: PChar): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
@@ -368,7 +367,7 @@ var
   FSOUND_CD_SetPaused: function (Drive: Byte; Paused: ByteBool): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_CD_SetVolume: function (Drive: Byte; Volume: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
   FSOUND_CD_SetTrackTime: function (Drive: Byte; ms: Integer): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
-  FSOUND_CD_Eject: function (Drive: Byte): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
+  FSOUND_CD_OpenTray: function (Drive: Byte; Open: Byte): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
 
 var
   FSOUND_CD_GetPaused: function (Drive: Byte): ByteBool; {$IFDEF LINUX} cdecl {$ELSE} stdcall {$ENDIF};
@@ -605,9 +604,10 @@ begin
   FSOUND_SetMemorySystem                := GetAddress(FMODHandle, '_FSOUND_SetMemorySystem@20');
   FSOUND_Init                           := GetAddress(FMODHandle, '_FSOUND_Init@12');
   FSOUND_Close                          := GetAddress(FMODHandle, '_FSOUND_Close@0');
+  FSOUND_Update                         := GetAddress(FMODHandle, '_FSOUND_Update@0');
+  FSOUND_SetSpeakerMode                 := GetAddress(FMODHandle, '_FSOUND_SetSpeakerMode@4');
   FSOUND_SetSFXMasterVolume             := GetAddress(FMODHandle, '_FSOUND_SetSFXMasterVolume@4');
   FSOUND_SetPanSeperation               := GetAddress(FMODHandle, '_FSOUND_SetPanSeperation@4');
-  FSOUND_SetSpeakerMode                 := GetAddress(FMODHandle, '_FSOUND_SetSpeakerMode@4');
   FSOUND_GetError                       := GetAddress(FMODHandle, '_FSOUND_GetError@0');
   FSOUND_GetVersion                     := GetAddress(FMODHandle, '_FSOUND_GetVersion@0');
   FSOUND_GetOutput                      := GetAddress(FMODHandle, '_FSOUND_GetOutput@0');
@@ -620,8 +620,9 @@ begin
   FSOUND_GetOutputRate                  := GetAddress(FMODHandle, '_FSOUND_GetOutputRate@0');
   FSOUND_GetMaxChannels                 := GetAddress(FMODHandle, '_FSOUND_GetMaxChannels@0');
   FSOUND_GetMaxSamples                  := GetAddress(FMODHandle, '_FSOUND_GetMaxSamples@0');
+  FSOUND_GetSpeakerMode                 := GetAddress(FMODHandle, '_FSOUND_GetSpeakerMode@0');
   FSOUND_GetSFXMasterVolume             := GetAddress(FMODHandle, '_FSOUND_GetSFXMasterVolume@0');
-  FSOUND_GetNumHardwareChannels         := GetAddress(FMODHandle, '_FSOUND_GetNumHardwareChannels@0');
+  FSOUND_GetNumHWChannels               := GetAddress(FMODHandle, '_FSOUND_GetNumHWChannels@12');
   FSOUND_GetChannelsPlaying             := GetAddress(FMODHandle, '_FSOUND_GetChannelsPlaying@0');
   FSOUND_GetCPUUsage                    := GetAddress(FMODHandle, '_FSOUND_GetCPUUsage@0');
   FSOUND_GetMemoryStats                 := GetAddress(FMODHandle, '_FSOUND_GetMemoryStats@8');
@@ -634,6 +635,7 @@ begin
   FSOUND_Sample_SetMode                 := GetAddress(FMODHandle, '_FSOUND_Sample_SetMode@8');
   FSOUND_Sample_SetLoopPoints           := GetAddress(FMODHandle, '_FSOUND_Sample_SetLoopPoints@12');
   FSOUND_Sample_SetDefaults             := GetAddress(FMODHandle, '_FSOUND_Sample_SetDefaults@20');
+  FSOUND_Sample_SetDefaultsEx           := GetAddress(FMODHandle, '_FSOUND_Sample_SetDefaultsEx@32');
   FSOUND_Sample_SetMinMaxDistance       := GetAddress(FMODHandle, '_FSOUND_Sample_SetMinMaxDistance@12');
   FSOUND_Sample_SetMaxPlaybacks         := GetAddress(FMODHandle, '_FSOUND_Sample_SetMaxPlaybacks@8');
   FSOUND_Sample_Get                     := GetAddress(FMODHandle, '_FSOUND_Sample_Get@4');
@@ -641,7 +643,9 @@ begin
   FSOUND_Sample_GetLength               := GetAddress(FMODHandle, '_FSOUND_Sample_GetLength@4');
   FSOUND_Sample_GetLoopPoints           := GetAddress(FMODHandle, '_FSOUND_Sample_GetLoopPoints@12');
   FSOUND_Sample_GetDefaults             := GetAddress(FMODHandle, '_FSOUND_Sample_GetDefaults@20');
+  FSOUND_Sample_GetDefaultsEx           := GetAddress(FMODHandle, '_FSOUND_Sample_GetDefaultsEx@32');
   FSOUND_Sample_GetMode                 := GetAddress(FMODHandle, '_FSOUND_Sample_GetMode@4');
+  FSOUND_Sample_GetMinMaxDistance       := GetAddress(FMODHandle, '_FSOUND_Sample_GetMinMaxDistance@12');
   FSOUND_PlaySound                      := GetAddress(FMODHandle, '_FSOUND_PlaySound@8');
   FSOUND_PlaySoundEx                    := GetAddress(FMODHandle, '_FSOUND_PlaySoundEx@16');
   FSOUND_StopSound                      := GetAddress(FMODHandle, '_FSOUND_StopSound@4');
@@ -655,9 +659,13 @@ begin
   FSOUND_SetReserved                    := GetAddress(FMODHandle, '_FSOUND_SetReserved@8');
   FSOUND_SetPaused                      := GetAddress(FMODHandle, '_FSOUND_SetPaused@8');
   FSOUND_SetLoopMode                    := GetAddress(FMODHandle, '_FSOUND_SetLoopMode@8');
+  FSOUND_SetCurrentPosition             := GetAddress(FMODHandle, '_FSOUND_SetCurrentPosition@8');
+  FSOUND_3D_SetAttributes               := GetAddress(FMODHandle, '_FSOUND_3D_SetAttributes@12');
+  FSOUND_3D_SetMinMaxDistance           := GetAddress(FMODHandle, '_FSOUND_3D_SetMinMaxDistance@12');
   FSOUND_IsPlaying                      := GetAddress(FMODHandle, '_FSOUND_IsPlaying@4');
   FSOUND_GetFrequency                   := GetAddress(FMODHandle, '_FSOUND_GetFrequency@4');
   FSOUND_GetVolume                      := GetAddress(FMODHandle, '_FSOUND_GetVolume@4');
+  FSOUND_GetAmplitude                   := GetAddress(FMODHandle, '_FSOUND_GetAmplitude@4');
   FSOUND_GetPan                         := GetAddress(FMODHandle, '_FSOUND_GetPan@4');
   FSOUND_GetSurround                    := GetAddress(FMODHandle, '_FSOUND_GetSurround@4');
   FSOUND_GetMute                        := GetAddress(FMODHandle, '_FSOUND_GetMute@4');
@@ -666,9 +674,18 @@ begin
   FSOUND_GetPaused                      := GetAddress(FMODHandle, '_FSOUND_GetPaused@4');
   FSOUND_GetLoopMode                    := GetAddress(FMODHandle, '_FSOUND_GetLoopMode@4');
   FSOUND_GetCurrentPosition             := GetAddress(FMODHandle, '_FSOUND_GetCurrentPosition@4');
-  FSOUND_SetCurrentPosition             := GetAddress(FMODHandle, '_FSOUND_SetCurrentPosition@8');
   FSOUND_GetCurrentSample               := GetAddress(FMODHandle, '_FSOUND_GetCurrentSample@4');
   FSOUND_GetCurrentLevels               := GetAddress(FMODHandle, '_FSOUND_GetCurrentLevels@12');
+  FSOUND_GetNumSubChannels              := GetAddress(FMODHandle, '_FSOUND_GetNumSubChannels@4');
+  FSOUND_GetSubChannel                  := GetAddress(FMODHandle, '_FSOUND_GetSubChannel@8');
+  FSOUND_3D_GetAttributes               := GetAddress(FMODHandle, '_FSOUND_3D_GetAttributes@12');
+  FSOUND_3D_GetMinMaxDistance           := GetAddress(FMODHandle, '_FSOUND_3D_GetMinMaxDistance@12');
+  FSOUND_3D_Listener_SetCurrent         := GetAddress(FMODHandle, '_FSOUND_3D_Listener_SetCurrent@8');
+  FSOUND_3D_Listener_SetAttributes      := GetAddress(FMODHandle, '_FSOUND_3D_Listener_SetAttributes@32');
+  FSOUND_3D_Listener_GetAttributes      := GetAddress(FMODHandle, '_FSOUND_3D_Listener_GetAttributes@32');
+  FSOUND_3D_SetDopplerFactor            := GetAddress(FMODHandle, '_FSOUND_3D_SetDopplerFactor@4');
+  FSOUND_3D_SetDistanceFactor           := GetAddress(FMODHandle, '_FSOUND_3D_SetDistanceFactor@4');
+  FSOUND_3D_SetRolloffFactor            := GetAddress(FMODHandle, '_FSOUND_3D_SetRolloffFactor@4');
   FSOUND_FX_Enable                      := GetAddress(FMODHandle, '_FSOUND_FX_Enable@8');
   FSOUND_FX_SetChorus                   := GetAddress(FMODHandle, '_FSOUND_FX_SetChorus@32');
   FSOUND_FX_SetCompressor               := GetAddress(FMODHandle, '_FSOUND_FX_SetCompressor@28');
@@ -679,15 +696,6 @@ begin
   FSOUND_FX_SetI3DL2Reverb              := GetAddress(FMODHandle, '_FSOUND_FX_SetI3DL2Reverb@52');
   FSOUND_FX_SetParamEQ                  := GetAddress(FMODHandle, '_FSOUND_FX_SetParamEQ@16');
   FSOUND_FX_SetWavesReverb              := GetAddress(FMODHandle, '_FSOUND_FX_SetWavesReverb@20');
-  FSOUND_Update                         := GetAddress(FMODHandle, '_FSOUND_Update@0');
-  FSOUND_3D_SetAttributes               := GetAddress(FMODHandle, '_FSOUND_3D_SetAttributes@12');
-  FSOUND_3D_GetAttributes               := GetAddress(FMODHandle, '_FSOUND_3D_GetAttributes@12');
-  FSOUND_3D_Listener_SetCurrent         := GetAddress(FMODHandle, '_FSOUND_3D_Listener_SetCurrent@8');
-  FSOUND_3D_Listener_SetAttributes       := GetAddress(FMODHandle, '_FSOUND_3D_Listener_SetAttributes@32');
-  FSOUND_3D_Listener_GetAttributes       := GetAddress(FMODHandle, '_FSOUND_3D_Listener_GetAttributes@32');
-  FSOUND_3D_SetDopplerFactor            := GetAddress(FMODHandle, '_FSOUND_3D_SetDopplerFactor@4');
-  FSOUND_3D_SetDistanceFactor           := GetAddress(FMODHandle, '_FSOUND_3D_SetDistanceFactor@4');
-  FSOUND_3D_SetRolloffFactor            := GetAddress(FMODHandle, '_FSOUND_3D_SetRolloffFactor@4');
   FSOUND_Stream_Open                    := GetAddress(FMODHandle, '_FSOUND_Stream_Open@16');
   FSOUND_Stream_Create                  := GetAddress(FMODHandle, '_FSOUND_Stream_Create@20');
   FSOUND_Stream_Close                   := GetAddress(FMODHandle, '_FSOUND_Stream_Close@4');
@@ -733,7 +741,7 @@ begin
   FSOUND_CD_SetPaused                   := GetAddress(FMODHandle, '_FSOUND_CD_SetPaused@8');
   FSOUND_CD_SetVolume                   := GetAddress(FMODHandle, '_FSOUND_CD_SetVolume@8');
   FSOUND_CD_SetTrackTime                := GetAddress(FMODHandle, '_FSOUND_CD_SetTrackTime@8');
-  FSOUND_CD_Eject                       := GetAddress(FMODHandle, '_FSOUND_CD_Eject@4');
+  FSOUND_CD_OpenTray                    := GetAddress(FMODHandle, '_FSOUND_CD_OpenTray@8');
   FSOUND_CD_GetPaused                   := GetAddress(FMODHandle, '_FSOUND_CD_GetPaused@4');
   FSOUND_CD_GetTrack                    := GetAddress(FMODHandle, '_FSOUND_CD_GetTrack@4');
   FSOUND_CD_GetNumTracks                := GetAddress(FMODHandle, '_FSOUND_CD_GetNumTracks@4');

@@ -2,7 +2,7 @@ unit q3types;
 
 interface
 
-uses OpenGl12;
+uses OpenGl;
 
 const FACE_POLYGON   = 1;
       FACE_PATCH     = 2;

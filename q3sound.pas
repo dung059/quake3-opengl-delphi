@@ -2,13 +2,14 @@ unit q3sound;
 
 interface
 
-uses fmod, fmodtypes, fmoderrors, SysUtils, q3types;
+uses fmod, fmodtypes, fmoderrors, SysUtils, q3types, Bass;
 
 type
   // sound lib entry
   TSample = record
     Name : string;
     SamplePtr : PFSoundSample;
+    SampleBass: HSTREAM;
     Loop : boolean;
     Use3D : boolean;
     //Position : TVector3f;
@@ -19,6 +20,7 @@ type
   TEmitter = record
     SampleId : integer;
     SamplePtr : PFSoundSample;
+    SampleBass: HSTREAM;
     Position : TVector3f;
     UsePosition :boolean;
     //Loop : boolean;
@@ -43,14 +45,19 @@ type
     FCameraChannel : integer;
   protected
   public
+    // Var for BASS Sound
+    Stream   : array of HSTREAM;
+    BassInit : Boolean;
     constructor Create;
     destructor Destroy; override;
     // returns index of FSoundLib
-    function LoadSample(name : string; Loop, Use3D : boolean) : integer;
+    function LoadSample(name : string; Loop, Use3D : boolean) : integer; overload;
+    function LoadSample( inmemory: Boolean; name : ansistring) : integer; overload;
     // returns index of FEmitters ( = channel)
     function NewEmitter(SampleId : integer; Position : TVector3f; UsePosition, IsCamera : boolean) : integer;
     //procedure Play(Channel : integer; Pause : boolean);
     //procedure Update(Channel : integer; Position : TVector3f);
+    procedure PlayStream(soundname: String; flush: BOOL; flags: DWORD);
     procedure Update(PlayerPosition : TVector3f);
     function CPU_Usage : single;
     property Enabled : boolean read FEnabled;
@@ -59,7 +66,7 @@ type
 
 implementation
 
-uses Global;
+uses Global, Winapi.Windows;
 
 constructor TSoundEngine.Create;
 var caps: Cardinal;
@@ -86,7 +93,7 @@ begin
       end;
     end;
 
-    Cons.AddMsg('');
+    Cons.AddMsg('Init Sound');
     Cons.AddMsg('--- DRIVER LIST ---');
     for i := 0 to FSOUND_GetNumDrivers() - 1 do begin
       Cons.AddMsg(inttostr(i + 1) + ' - ' + FSOUND_GetDriverName(i)); // print driver names
@@ -100,13 +107,14 @@ begin
       if Caps = 0 then
         Cons.AddMsg('  - This sound card cannot support hardware 3D. Software mode will be used.');
     end;
-    Cons.AddMsg('Setting Driver to '+ FSound_GetDriverName(0));
-    FSOUND_SetDriver(0);
+    Cons.AddMsg('Setting Driver to '+ FSound_GetDriverName(1));
+    FSOUND_SetDriver(1);
+    FSOUND_SetMixer(FSOUND_MIXER_QUALITY_AUTODETECT);
+    FSOUND_SetMinHardwareChannels(MaxChannels);
 
-     FSOUND_SetMinHardwareChannels(MaxChannels);
     if FSOUND_Init(FSampleRate, MaxChannels, 0) then begin
       FEnabled := true;
-      FSOUND_SetVolume(FSOUND_ALL, 0);
+      //FSOUND_SetVolume(FSOUND_ALL, 0);
     end;
     case (FSOUND_GetMixer()) of
       FSOUND_MIXER_BLENDMODE:     Cons.AddMsg('Mixer Mode: FSOUND_MIXER_BLENDMODE');
@@ -117,6 +125,35 @@ begin
       FSOUND_MIXER_QUALITY_MMXP6: Cons.AddMsg('Mixer Mode: FSOUND_MIXER_QUALITY_MMXP6');
     end;
   end;
+
+  // BASS
+  //--- Initialize and Start BASS Sound system ----//
+  Stream := 0;
+  BASSInit :=FALSE;
+  if BASS_GetVersion() <> MAKELONG(0,8) then    //  Check that BASS 0.8+ was loaded
+  begin
+    MessageBox(0, 'BASS version 0.8 Sound System was not loaded', 'Sound', MB_OK or MB_ICONERROR);
+    exit;
+  end;
+
+  // Initialize digital sound - default device, 44100hz, stereo, 16 bits
+  if not BASS_Init(-1, 44100, 0, h_Wnd) then
+  begin
+    MessageBox(0, 'Can''t initialize digital sound system', 'Sound', MB_OK or MB_ICONERROR);
+    exit;
+  end;
+
+  //  Start digital output
+  BASS_Start;
+  {Stream := BASS_StreamCreateFile(FALSE, PAnsiChar('E:\GAME\Quake III\baseq3\pak0\sound\player\footsteps\step2.wav'), 0, 0, 0);
+  if Stream = 0 then
+  begin
+    MessageBox(0, 'Can''t create digital sound stream. Music file might be missing', 'Sound', MB_OK or MB_ICONERROR);
+    exit;
+  end;
+  }
+  BASSInit :=TRUE;
+
 end;
 
 destructor TSoundEngine.Destroy;
@@ -126,11 +163,30 @@ begin
   inherited Destroy;
 end;
 
+function TSoundEngine.LoadSample(inmemory: Boolean; name: ansistring): integer;
+var Stream1   : HSTREAM;
+begin
+  Stream1 := BASS_StreamCreateFile(FALSE, PChar(name), 0, 0, 0);
+  if Stream1 = 0 then
+  begin
+    //MessageBox(0, 'Can''t create digital sound stream. Music file might be missing', 'Sound', MB_OK or MB_ICONERROR);
+    exit;
+  end else begin
+    FSoundLib[FnumOfSamples].Name := name;
+    FSoundLib[FnumOfSamples].SampleBass := Stream1;
+    FSoundLib[FnumOfSamples].Loop := false;
+    FSoundLib[FnumOfSamples].Use3D := false;
+    result := FnumOfSamples;
+    inc(FnumOfSamples);
+  end;
+end;
+
 //function TSoundEngine.LoadSample(name : string; Position : TVector3f; UsePosition, Loop : boolean) : integer;
 function TSoundEngine.LoadSample(name : string; Loop, Use3D : boolean) : integer;
-var sptr : PFSoundSample;
+var sptr : PFSoundSample; mdl: PFMusicModule;
     i, Mode : integer;
 begin
+  result := -1;
   if not FEnabled then begin
     result := -1;
     exit;
@@ -167,10 +223,17 @@ begin
     result := FnumOfSamples;
     inc(FnumOfSamples);
     if Use3D then
-      FSOUND_Sample_SetMinMaxDistance(sptr, 1, 1);
-  end
-  else
-    result := -1;
+      begin FSOUND_Sample_SetMinMaxDistance(sptr, 1, 1000);FSOUND_Sample_SetMode(sptr, FSOUND_LOOP_NORMAL);
+      end;
+    inc(Result);
+  end;
+
+  mdl := FMUSIC_LoadSong('E:\GAME\Quake III\baseq3\pak0\sound\player\footsteps\invtro94.s3m'); {can be xm, s3m...}
+  if mdl <> nil then begin
+    FMUSIC_PlaySong(mdl);
+    FMUSIC_SetPanSeperation(mdl, 0.15); // 15% crossover
+    FMUSIC_SetOrder(mdl, FMUSIC_GetOrder(mdl) - 1);
+  end;
 
   // this section is evaluated only if the sample isn't loaded
 (*
@@ -210,14 +273,20 @@ begin
   if not FEnabled then exit;
 
   if (FnumOfEmitters < (MaxChannels-1)) then begin
-    if (SampleId >= 0) and (SampleId < FnumOfSamples) then begin
+    if (SampleId >= 0) {and (SampleId < FnumOfSamples)} then begin
       FEmitters[FnumOfEmitters].SampleId := SampleId;
-      FEmitters[FnumOfEmitters].SamplePtr := FSoundLib[SampleId].SamplePtr;
+      if BassInit then
+        FEmitters[FnumOfEmitters].SampleBass := FSoundLib[FnumOfEmitters].SampleBass
+      else 
+        FEmitters[FnumOfEmitters].SamplePtr := FSoundLib[SampleId].SamplePtr;
       FEmitters[FnumOfEmitters].Position := Position;
       FEmitters[FnumOfEmitters].UsePosition := UsePosition;
 //      FSOUND_SetVolume(FnumOfEmitters, 0);
       if not IsCamera then
-        FSOUND_PlaySoundEx(FnumOfEmitters, FEmitters[FnumOfEmitters].SamplePtr, nil, true);
+        if BassInit then
+           BASS_StreamPlay(FEmitters[FnumOfEmitters].SampleBass, FALSE, 0)
+        else
+          FSOUND_PlaySoundEx(FnumOfEmitters, FEmitters[FnumOfEmitters].SamplePtr, nil, true);
       result := FnumOfEmitters;
       if IsCamera then
         FCameraChannel := FnumOfEmitters;
@@ -234,6 +303,13 @@ begin
     FSOUND_SetVolume(Channel, 0);
   end;
 *)
+end;
+
+procedure TSoundEngine.PlayStream(soundname: String; flush: BOOL;
+  flags: DWORD);
+begin
+  if BassInit then
+    BASS_StreamPlay(stream[0], FALSE, 0);
 end;
 
 (*
@@ -284,15 +360,24 @@ begin
           FSOUND_SetVolume(i, FX_VOL);
           if Camera.PlaySound then begin
             if GroundType = 'NORMAL' then
-              FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.NormalSound+Camera.sndCnt].SamplePtr, nil, false)
-            else if GroundType = 'METAL' then
-              FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.MetalSound+Camera.sndCnt].SamplePtr, nil, false)
-            else if GroundType = 'WATER' then
-              FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.WaterSound+Camera.sndCnt].SamplePtr, nil, false);
+              if BassInit then
+                 BASS_StreamPlay(FSoundLib[Camera.NormalSound+Camera.sndCnt].SampleBass, FALSE, 0)
+              else
+                FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.NormalSound+Camera.sndCnt].SamplePtr, nil, false);
+            if GroundType = 'METAL' then
+              if BassInit then
+                 BASS_StreamPlay(FSoundLib[Camera.MetalSound+Camera.sndCnt].SampleBass, FALSE, 0)
+              else
+                FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.MetalSound+Camera.sndCnt].SamplePtr, nil, false);
+            if GroundType = 'WATER' then
+              if BassInit then
+                 BASS_StreamPlay(FSoundLib[Camera.WaterSound+Camera.sndCnt].SampleBass, FALSE, 0)
+              else
+                FSOUND_PlaySoundEx(FCameraChannel, FSoundLib[Camera.WaterSound+Camera.sndCnt].SamplePtr, nil, false);
 (*            inc(Camera.sndCnt);
             if Camera.sndCnt > 3 then
               Camera.sndCnt := 0;*)
-            Camera.sndCnt := Random(3);  
+            Camera.sndCnt := Random(2);  
             Camera.PlaySound := false;
           end;  
         end

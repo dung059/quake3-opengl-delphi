@@ -20,9 +20,6 @@ type THiResTimer = class(TObject)
     function DiffTime(start_time, end_time : int64) : double;
   end;
 
-
-var gTimer : THiResTimer;
-
 implementation
 
 constructor THiResTimer.Create;

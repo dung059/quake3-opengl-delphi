@@ -2,7 +2,7 @@ unit shaderValues;
 
 interface
 
-uses OpenGL12, classes, sysutils, Hashes;
+uses OpenGL, classes, sysutils, Hashes;
 
 var ValueList : TIntegerHash;
 function LookUp(name : string) : integer;

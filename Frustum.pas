@@ -2,7 +2,7 @@ unit Frustum;
 
 interface
 
-uses OpenGL12;
+uses OpenGL;
 
 // This is the index in our selection buffer that has the closet object ID clicked
 const FIRST_OBJECT_ID  = 3;

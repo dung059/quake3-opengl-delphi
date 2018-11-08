@@ -1,32 +1,22 @@
 { =============================================================================================== }
-{ FMOD presets header file. Copyright (c), FireLight Technologies Pty, Ltd. 1999-2002.            }
+{ FMOD presets header file. Copyright (c), FireLight Technologies Pty, Ltd. 1999-2004.            }
 { =============================================================================================== }
 {
   NOTE: For the demos to run you must have either fmod.dll (in Windows)
-  or libfmod-3.6.so (in Linux) installed.
+  or libfmod-3.75.so (in Linux) installed.
 
   In Windows, copy the fmod.dll file found in the api directory to either of
   the following locations (in order of preference)
   - your application directory
   - Windows\System (95/98) or WinNT\System32 (NT/2000/XP)
 
-  In Linux, make sure you are signed in as root and copy the libfmod-3.6.so
+  In Linux, make sure you are signed in as root and copy the libfmod-3.75.so
   file from the api directory to your /usr/lib/ directory.
   Then via a command line, navigate to the /usr/lib/ directory and create
   a symbolic link between libfmod-3.5.so and libfmod.so. This is done with
   the following command (assuming you are in /usr/lib/)...
-  ln -s libfmod-3.6.so libfmod.so.
+  ln -s libfmod-3.75.so libfmod.so.
 }
-{ =============================================================================================== }
-{ HISTORY                                                                                         }
-{ =============================================================================================== }
-{
-  03-Nov-2002 Sly
-  - Separated the dynamic library version into fmoddyn.pas
-  - Separated the types into fmodtypes.pas to avoid duplication in fmod.pas and fmoddyn.pas.
-    fmodtypes.pas is also used by fmodpresets.pas.
-}
-{ =============================================================================================== }
 
 unit fmodpresets;
 

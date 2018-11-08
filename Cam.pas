@@ -2,7 +2,7 @@ unit Cam;
 
 interface
 
-uses math3d, OpenGL12, windows, q3types;
+uses math3d, OpenGL, windows, q3types;
 
 type
   TMatrix3x3 = array[0..8] of single;
@@ -29,7 +29,9 @@ type TCamera = class(TObject)
     friction : single;
     max_speed : single;
     move_mouse_x,
-    move_mouse_y : single;
+    move_mouse_y,
+    move_mouse_click_x,
+    move_mouse_click_y : single;
     fov : single;
     cos_fov : single;
     proj_ratio : single; // projection ratio
@@ -37,13 +39,12 @@ type TCamera = class(TObject)
     eyedir : TVector3f;  // eyedir, and normal of the viewing z=0 plane
     eyedist : single; // signed distance to the z=0 plane
     Velocity : TVector3f;
-    ScreenLock : boolean;
     moveLeft,
     moveRight,
     moveUp,
     moveDown,
     moveForward,
-    moveBackward : boolean;
+    moveBackward, mouseclick, screenlock : boolean;
     constructor Create;
     destructor Destroy; override;
     procedure Init(fov, w, h, x, y , new_angle: single);
@@ -53,6 +54,7 @@ type TCamera = class(TObject)
     function Update(speed : single) : boolean;
     procedure MoveCameraByMouse;
     procedure AutoRotate;
+    procedure ResetPosition;
 end;
 
 implementation
@@ -86,7 +88,6 @@ begin
   Channel := -1;
   PlaySound := false;
   sndCnt := 0;
-  ScreenLock := true;
 end;
 
 destructor TCamera.Destroy;
@@ -164,8 +165,8 @@ begin
 
   if (moveForward)  then versor.z := versor.z-1.0;
   if (moveBackward) then versor.z := versor.z+1.0;
-{  if (moveUp)       then versor.y := versor.y+1.0;
-  if (moveDown)     then versor.y := versor.y-1.0;}
+  if (moveUp)       then versor.y := versor.y+1.0;
+  if (moveDown)     then versor.y := versor.y-1.0;
   if (moveLeft)     then versor.x := versor.x-1.0;
   if (moveRight)    then versor.x := versor.x+1.0;
 
@@ -174,6 +175,12 @@ begin
   if (versor.x <> 0) then begin
     dir.x := dir.x +  versor.x*Cos(rad_yaw);
     dir.z := dir.z +  versor.x*Sin(rad_yaw);
+  end;
+
+  // fly
+  if (versor.y <> 0) then begin
+    dir.y := dir.x -  versor.y*Sin(rad_yaw);
+    //dir.z := dir.z +  versor.y*Cos(rad_yaw);
   end;
 
   // move
@@ -185,7 +192,7 @@ begin
   if (Normalize(versor) > 0) then begin
     velocity.x := velocity.x + dir.x*speed*acceleration;
     velocity.y := velocity.y + dir.y*speed*acceleration;
-    velocity.y := 0;
+    //velocity.y := 0;
     velocity.z := velocity.z + dir.z*speed*acceleration;
   end;
 
@@ -258,26 +265,44 @@ begin
   middleX := SCREEN_WIDTH SHR 1;       // This is a binary shift to get half the width
   middleY := SCREEN_HEIGHT SHR 1;      // This is a binary shift to get half the height
 
-  // Get the mouse's current X,Y position
-  GetCursorPos(mousePos);
+  if screenlock then begin
+    // Get the mouse's current X,Y position
+    GetCursorPos(mousePos);
 
-  // If our cursor is still in the middle, we never moved... so don't update the screen
-  if (mousePos.X = middleX) and (mousePos.Y = middleY) then
-    exit;
+    // If our cursor is still in the middle, we never moved... so don't update the screen
+    if (mousePos.X = middleX) and (mousePos.Y = middleY) then
+      exit;
 
-  lastKeyPress := GetTickCount;
-  // Set the mouse position to the middle of our window
-  if ScreenLock then
-    begin
-      SetCursorPos(middleX, middleY);
-      // Get the direction the mouse moved in, but bring the number down to a reasonable amount
-      move_mouse_x :=  (mousePos.X - middleX);
-      move_mouse_y  := (mousePos.Y - middleY);
-    end
-  else
-  begin
-    //ShowCursor(true);
+    lastKeyPress := GetTickCount;
+    // Set the mouse position to the middle of our window
+    SetCursorPos(middleX, middleY);
+
+    // Get the direction the mouse moved in, but bring the number down to a reasonable amount
+    move_mouse_x :=  (mousePos.X - middleX);
+    move_mouse_y  := (mousePos.Y - middleY);
   end;
+  if mouseclick then begin
+//        xRot := xRot + (mousePos.X - Ycoord)/2;  // moving up and down = rot around X-axis
+//        yRot := yRot + (mousePos.Y - Xcoord)/2;
+//        Xcoord := mousePos.X;
+//        Ycoord := mousePos.Y;
+    GetCursorPos(mousePos);
+    move_mouse_click_x :=  move_mouse_click_x + (mousePos.Y - Ycoord)/2;
+    move_mouse_click_y  := move_mouse_click_y + (mousePos.X - Xcoord)/2;
+    Xcoord := mousePos.X;
+    Ycoord := mousePos.Y;
+    //mouseclick := false;
+  end;
+end;
+
+procedure TCamera.ResetPosition;
+begin
+  position.x := 0;
+  position.y := 0;
+  position.z := 0;
+  x_angle := 0;
+  y_angle := 90;
+  velocity := SetVector(0, 0, 0);		// initialization
 end;
 
 procedure TCamera.AutoRotate;

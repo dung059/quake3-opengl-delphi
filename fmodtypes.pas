@@ -1,21 +1,21 @@
 {================================================================================================ }
-{ FMOD Types header file. Copyright (c), Firelight Technologies Pty, Ltd. 1999-2003.              }
+{ FMOD Types header file. Copyright (c), Firelight Technologies Pty, Ltd. 1999-2004.              }
 { =============================================================================================== }
 {
   NOTE: For the demos to run you must have either fmod.dll (in Windows)
-  or libfmod-3.71.so (in Linux) installed.
+  or libfmod-3.75.so (in Linux) installed.
 
   In Windows, copy the fmod.dll file found in the api directory to either of
   the following locations (in order of preference)
   - your application directory
   - Windows\System (95/98) or WinNT\System32 (NT/2000/XP)
 
-  In Linux, make sure you are signed in as root and copy the libfmod-3.71.so
+  In Linux, make sure you are signed in as root and copy the libfmod-3.75.so
   file from the api directory to your /usr/lib/ directory.
   Then via a command line, navigate to the /usr/lib/ directory and create
-  a symbolic link between libfmod-3.71.so and libfmod.so. This is done with
+  a symbolic link between libfmod-3.75.so and libfmod.so. This is done with
   the following command (assuming you are in /usr/lib/)...
-  ln -s libfmod-3.71.so libfmod.so.
+  ln -s libfmod-3.75.so libfmod.so.
 }
 { =============================================================================================== }
 
@@ -71,7 +71,7 @@ type
 {$ENDIF}
 
 const
-  FMOD_VERSION: Single = 3.71;
+  FMOD_VERSION: Single = 3.75;
 
 {
   FMOD defined types
@@ -174,11 +174,12 @@ type
     FSOUND_OUTPUT_ESD,      // Linux/Unix ESD (Enlightment Sound Daemon) driver.
     FSOUND_OUTPUT_ALSA,     // Linux Alsa driver.
 
-    FSOUND_OUTPUT_ASIO,     // Low latency ASIO driver
-    FSOUND_OUTPUT_XBOX,     // Xbox driver
-    FSOUND_OUTPUT_PS2,      // PlayStation 2 driver
-    FSOUND_OUTPUT_MAC,      // Mac SoundMager driver
-    FSOUND_OUTPUT_GC,       // Gamecube driver
+    FSOUND_OUTPUT_ASIO,     // Low latency ASIO driver.
+    FSOUND_OUTPUT_XBOX,     // Xbox driver.
+    FSOUND_OUTPUT_PS2,      // PlayStation 2 driver.
+    FSOUND_OUTPUT_MAC,      // Mac SoundMager driver.
+    FSOUND_OUTPUT_GC,       // Gamecube driver.
+    FSOUND_OUTPUT_PSP,      // PlayStation Portable driver.
 
     FSOUND_OUTPUT_NOSOUND_NONREALTIME   // This is the same as nosound, but the sound generation is driven by FSOUND_Update
   );
@@ -393,7 +394,7 @@ const
   FSOUND_UNMANAGED      = -2;     // value to allocate a sample that is NOT managed by FSOUND or placed in a sample slot.
   FSOUND_ALL            = -3;     // for a channel index , this flag will affect ALL channels available! Not supported by every function.
   FSOUND_STEREOPAN      = -1;     // value for FSOUND_SetPan so that stereo sounds are not played at half volume. See FSOUND_SetPan for more on this.
-  FSOUND_SYSTEM_CHANNEL = -1000;  // special 'channel' ID for all channel based functions that want to alter the global FSOUND software mixing output
+  FSOUND_SYSTEMCHANNEL  = -1000;  // special 'channel' ID for all channel based functions that want to alter the global FSOUND software mixing output
   FSOUND_SYSTEMSAMPLE   = -1000;  // special 'sample' ID for all sample based functions that want to alter the global FSOUND software mixing output sample
 // [DEFINE_END]
 
@@ -549,13 +550,8 @@ const
 {
 [STRUCTURE] 
 [
-    [NAME]
-    FSOUND_REVERB_CHANNELPROPERTIES
-
     [DESCRIPTION]
     Structure defining the properties for a reverb source, related to a FSOUND channel.
-
-    [REMARKS]
     For more indepth descriptions of the reverb properties under win32, please see the EAX3
     documentation at http://developer.creative.com/ under the 'downloads' section.
     If they do not have the EAX3 documentation, then most information can be attained from
@@ -702,7 +698,7 @@ type
     [DESCRIPTION]
     Initialization flags.  Use them with FSOUND_Init in the flags parameter to change various behaviour.
 
-    FSOUND_INIT_ENABLEOUTPUTFX Is an init mode which enables the FSOUND mixer buffer to be affected by DirectX 8 effects.
+    FSOUND_INIT_ENABLESYSTEMCHANNELFX Is an init mode which enables the FSOUND mixer buffer to be affected by DirectX 8 effects.
     Note that due to limitations of DirectSound, FSOUND_Init may fail if this is enabled because the buffersize is too small.
     This can be fixed with FSOUND_SetBufferSize.  Increase the BufferSize until it works.
     When it is enabled you can use the FSOUND_FX api, and use FSOUND_SYSTEMCHANNEL as the channel id when setting parameters.
@@ -714,14 +710,20 @@ type
 const
   FSOUND_INIT_USEDEFAULTMIDISYNTH     = $01;  // Causes MIDI playback to force software decoding.
   FSOUND_INIT_GLOBALFOCUS             = $02;  // For DirectSound output - sound is not muted when window is out of focus.
-  FSOUND_INIT_ENABLEOUTPUTFX          = $04;  // For DirectSound output - Allows FSOUND_FX api to be used on global software mixer output!
-  FSOUND_INIT_ACCURATEVULEVELS        = $08;  // This latency adjusts FSOUND_GetCurrentLevels, but incurs a small cpu and memory hit
-  FSOUND_INIT_PS2_DISABLECORE0REVERB  = $10;  // PS2 only - Disable reverb on CORE 0 to regain SRAM
-  FSOUND_INIT_PS2_DISABLECORE1REVERB  = $20;  // PS2 only - Disable reverb on CORE 1 to regain SRAM
-  FSOUND_INIT_PS2_SWAPDMACORES        = $40;  // PS2 only - By default FMOD uses DMA CH0 for mixing, CH1 for uploads, this flag swaps them around
-  FSOUND_INIT_DONTLATENCYADJUST       = $80;  // Callbacks are not latency adjusted, and are called at mix time.  Also information functions are immediate
-  FSOUND_INIT_GC_INITLIBS             = $100; // Gamecube only - Initializes GC audio libraries
-  FSOUND_INIT_STREAM_FROM_MAIN_THREAD = $200; // Turns off fmod streamer thread, and makes streaming update from FSOUND_Update called by the user
+  FSOUND_INIT_ENABLESYSTEMCHANNELFX   = $04;  // For DirectSound output - Allows FSOUND_FX api to be used on global software mixer output!
+  FSOUND_INIT_ACCURATEVULEVELS        = $08;  // This latency adjusts FSOUND_GetCurrentLevels, but incurs a small cpu and memory hit.
+  FSOUND_INIT_PS2_DISABLECORE0REVERB  = $10;  // PS2 only - Disable reverb on CORE 0 to regain SRAM.
+  FSOUND_INIT_PS2_DISABLECORE1REVERB  = $20;  // PS2 only - Disable reverb on CORE 1 to regain SRAM.
+  FSOUND_INIT_PS2_SWAPDMACORES        = $40;  // PS2 only - By default FMOD uses DMA CH0 for mixing, CH1 for uploads, this flag swaps them around.
+  FSOUND_INIT_DONTLATENCYADJUST       = $80;  // Callbacks are not latency adjusted, and are called at mix time.  Also information functions are immediate.
+  FSOUND_INIT_GC_INITLIBS             = $100; // Gamecube only - Initializes GC audio libraries.
+  FSOUND_INIT_STREAM_FROM_MAIN_THREAD = $200; // Turns off fmod streamer thread, and makes streaming update from FSOUND_Update called by the user.
+  FSOUND_INIT_PS2_USEVOLUMERAMPING    = $400; // PS2 only   - Turns on volume ramping system to remove hardware clicks.
+  FSOUND_INIT_DSOUND_DEFERRED         = $800; // Win32 only - For DirectSound output.  3D commands are batched together and executed at FSOUND_Update.
+  FSOUND_INIT_DSOUND_HRTF_LIGHT       = $1000; // Win32 only - For DirectSound output.  FSOUND_HW3D buffers use a slightly higher quality algorithm when 3d hardware acceleration is not present.
+  FSOUND_INIT_DSOUND_HRTF_FULL        = $2000; // Win32 only - For DirectSound output.  FSOUND_HW3D buffers use full quality 3d playback when 3d hardware acceleration is not present.
+  FSOUND_INIT_XBOX_REMOVEHEADROOM     = $4000; // XBox only - By default directsound attenuates all sound by 6db to avoid clipping/distortion.  CAUTION.  If you use this flag you are responsible for the final mix to make sure clipping / distortion doesn't happen.
+  FSOUND_INIT_PSP_SILENCEONUNDERRUN   = $8000; // PSP only - If streams skip / stutter when device is powered on, either increase stream buffersize, or use this flag instead to play silence while the UMD is recovering.
 
 // [DEFINE_END]
 
@@ -790,6 +792,29 @@ const
   FSOUND_FORMAT_MPEG        = $00010000;
   FSOUND_FORMAT_OGGVORBIS   = $00020000;
 (* [DEFINE_END] *)
+
+{
+[STRUCTURE] 
+[
+    [DESCRIPTION]
+    Structure defining a CD table of contents. This structure is returned as a tag from FSOUND_Stream_FindTagField when the tag name "CD_TOC" is specified.
+    Note: All tracks on the CD - including data tracks- will be represented in this structure so it's use for anything other than generating disc id information is not recommended.
+    See the cdda example program for info on retrieving and using this structure.
+
+    [SEE_ALSO]
+    FSOUND_Stream_Open
+    FSOUND_Stream_FindTagField
+]
+}
+type
+  TFSoundTOCTag = record
+    Name: array [0..3] of Char;             // The string "TOC" (4th character is 0), just in case this structure is accidentally treated as a string.
+    NumTracks: Integer;                     // The number of tracks on the CD.
+    Min: array [0..99] of Integer;          // The start offset of each track in minutes.
+    Sec: array [0..99] of Integer;          // The start offset of each track in seconds.
+    Frame: array [0..99] of Integer;        // The start offset of each track in frames.
+  end;
+// [STRUCT_END]
 
 implementation
 
