@@ -299,9 +299,9 @@ begin
   frameflash := 0;
 
   //LoadTexture('cube.bmp', CubeTex, false);
-  LoadTexture('images/volitionlogo.jpg', ProgressTex, false, false);
-  LoadTexture('images/freewill.jpg', Imagetextlogo, false, false);
-  LoadTexture('images/chrome.jpg', BackgroundTex, false, false);
+  LoadTexture('temps/images/volitionlogo.jpg', ProgressTex, false, false);
+  LoadTexture('temps/images/freewill.jpg', Imagetextlogo, false, false);
+  LoadTexture('temps/images/chrome.jpg', BackgroundTex, false, false);
 
   MyQuadratic := gluNewQuadric();							// Create A Pointer To The Quadric Object (Return 0 If No Memory) (NEW)
   gluQuadricNormals(MyQuadratic, GLU_SMOOTH);			// Create Smooth Normals (NEW)

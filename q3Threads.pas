@@ -88,7 +88,7 @@ begin
       Camera.ResetPosition;
 
       //Loaded := Q3Level.LoadBSP(QUAKE_FOLDER , BSP_NAME, BSP_MAP_INDEX);
-      if not Q3Level.LoadBSP('' , BSP_NAME, Pk3Zip.PK3_INDEX.ItemIndex, true) then PostQuitMessage(0);
+      if not Q3Level.LoadBSP('' , BSP_NAME, true) then PostQuitMessage(0);
 
       Player.LoadPlayer('\models\players\anarki', 'default');
       Player.SetAnim(0);

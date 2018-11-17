@@ -3,7 +3,7 @@ unit q3shaders;
 
 interface
 
-uses StdCtrls, sysutils, classes, OpenGL, Hashes;
+uses StdCtrls, sysutils, classes, OpenGL, Hashes, Q3Pk3Read;
 
 const
   Rad = Pi / 180.0;
@@ -134,18 +134,20 @@ type PShader = ^TShader;
 
 type TShaderManager = class(TCollection)
   private
+    FPk3Zip: TZipPK3;
     FGeneralTexture : cardinal;
     FAvailableShaders : TStringList;
     FRequiredShaders : TStringList;
     FLoadedTextures : TIntegerHash;
-    FPath : TStringList;
+    FQ3_base_Path : TStringList;
     FTempScript: TStringList;
     function GetItem(Index : integer) : TShader;
     function ScanShader(path, filename : string; memorystream: TMemoryStream) : boolean; // get available shaders
-    function ReadShadersFromList(filename : string; list : TStringList) : boolean;
+    function ReadShadersFromList(filename : string; list : TStringList) : boolean; overload;
+    function ReadShadersFromList(filename : string; list : TStringList; memorystream: TMemoryStream) : boolean; overload;
     function ScanAvailableShaders : boolean;
   public
-    constructor Create(quakePath : TStringList);
+    constructor Create(vPk3Zip: TZipPK3);
     destructor Destroy; override;
     function IndexOf(name : string) : integer;
     function ReadRequiredShaders : boolean;
@@ -362,16 +364,16 @@ var
   temp: TMemoryStream;
 begin
   result := false;
-  if Count > 0 then Clear;
+  //if Count > 0 then Clear;
 
-  FAvailableShaders.Clear;
+  //FAvailableShaders.Clear;
 
   // first scan in base_path for scripts
-  for I := 0 to FPath.Count - 1 do
+  for I := 0 to FQ3_base_Path.Count - 1 do
   begin
-    fullpath := FPath.Strings[i] + 'scripts\';
+    fullpath := IncludeTrailingBackslash(FQ3_base_Path.Strings[i]) + 'scripts\';
 
-    dir := FPath.Strings[i] + 'scripts\*.shader';
+    dir := FQ3_base_Path.Strings[i] + 'scripts\*.shader';
     if FindFirst(dir, faAnyFile, sr) = 0 then begin
       repeat
         ScanShader(fullpath,  sr.Name, nil);
@@ -382,19 +384,18 @@ begin
   end;
 
   // second scan in pk3 file in base_path
-  for I := 0 to length(Pk3Zip.FILES_IN_PK3) - 1 do
-    for k := 0 to Pk3Zip.FILES_IN_PK3[i].Count - 1 do
+  for I := 0 to fPk3Zip.Count- 1 do
+    for k := 0 to fPk3Zip.Items[i].Count - 1 do
       begin
-        if Pk3Zip.FILES_IN_PK3[i].Items[k].Ext = '.shader' then
+        if LowerCase(fPk3Zip.Items[i].FileNames[k].Ext) = '.shader' then
         begin
-          temp := Pk3Zip.ReadFileInPK3(Pk3Zip.FILES_IN_PK3[i], Pk3Zip.FILES_IN_PK3[i].Items[k].Full);
-          ScanShader(Pk3Zip.FILES_IN_PK3[i].Pk3FileName, Pk3Zip.FILES_IN_PK3[i].Items[k].Full, temp);
-          temp.Free;
-    //      Pk3Zip.Log(format('FileName: ' + #9 + '%s' + #9 + 'ext: ' + #9 + '%s' + #9 +
+          temp := fPk3Zip.ReadFileInPK3(Pk3Zip.Items[i], fPk3Zip.Items[i].FileNames[k].Full);
+          ScanShader(fPk3Zip.Items[i].Pk3FileName, fPk3Zip.Items[i].FileNames[k].Full, temp);
+    //      fPk3Zip.Log(format('FileName: ' + #9 + '%s' + #9 + 'ext: ' + #9 + '%s' + #9 +
     //        'PK3: ' + #9 + '%s' + #9 + 'Time: ' + #9 + '%s' + #$D#$A,
-    //        [xfile, ExtractFileExt(xfile), Pk3Zip.FILES_IN_PK3[i].FullPath,
+    //        [xfile, ExtractFileExt(xfile), fPk3Zip.Items[i].FullPath,
     //        formatdatetime('c', now())]));
-          result := true;
+          result := FAvailableShaders.Count <> 0;
         end;
       end;
 
@@ -415,23 +416,29 @@ begin
   end;
 end;
 
-constructor TShaderManager.Create(quakePath : TStringList);
+constructor TShaderManager.Create(vPk3Zip: TZipPK3);
+var
+  i, j: Integer;
+  value, name: string;
+  me: TMemoryStream;
 begin
   inherited Create(TShader);
 
   FAvailableShaders := TStringList.Create;
+  FAvailableShaders.Sorted := true;
+  FAvailableShaders.Duplicates := dupIgnore;
   FRequiredShaders := TStringList.Create;
   FRequiredShaders.Sorted := true;
+  FRequiredShaders.Duplicates := dupIgnore;
   FLoadedTextures := TIntegerHash.Create;
   FTempScript := TStringList.Create;
 
-  FPath := TStringList.Create;
-  if not Assigned(quakePath) then
-    begin
-      quakePath := TStringList.Create;
-      quakePath.Add('C:\Quake III\baseq3\');
-    end;
-  FPath.Assign(quakePath);
+  if not Assigned(vPk3Zip) then
+    FPk3Zip := TZipPK3.Create(Q3_BASE_PATH, BSP_NAME)
+  else
+    FPk3Zip := vPk3Zip;
+  FQ3_base_Path := TStringList.Create;
+  FQ3_base_Path.Assign(FPk3Zip.BASE_PATH);
   if FileExists('temps\scripts\script.shader') then
     begin
       FTempScript.LoadFromFile('temps\scripts\script.shader');
@@ -440,9 +447,27 @@ begin
   else
   begin
     ScanAvailableShaders;
+    CreateDir('temps');
     CreateDir('temps\scripts');
-    FTempScript.SaveToFile('temps\scripts\script.shader');
+    //FTempScript.SaveToFile('temps\scripts\script.shader');
   end;
+  //ReadShadersFromList('script.shader', FAvailableShaders);
+  for I := 0 to FAvailableShaders.Count - 1 do
+    begin
+//      value := FAvailableShaders.Strings[i];
+//      name := splitList(value);
+//      LoadTexture(name, false, false);
+    end;
+  if FAvailableShaders.Count = 0 then
+    with FPk3Zip.Items[FPk3Zip.IsOpenIndex] do
+      begin
+        for I := 0 to Count - 1 do
+           if FileNames[i].Ext = '.shader' then
+              begin
+                me := FPk3Zip.GetFileBytes(i);
+                ScanShader('', FileNames[i].Full, me);
+              end;
+      end;
 end;
 
 destructor TShaderManager.Destroy;
@@ -450,11 +475,11 @@ begin
   FAvailableShaders.Free;
   FRequiredShaders.Free;
   FLoadedTextures.Free;
-  if Assigned(FPath) then
-    FPath.Free;
+  if Assigned(FQ3_base_Path) then
+    FQ3_base_Path.Free;
   if Assigned(FTempScript) then
     begin
-      FTempScript.SaveToFile('temps\scripts\script.shader');
+      //FTempScript.SaveToFile('temps\scripts\script.shader');
       FTempScript.Free;
     end;
 
@@ -475,6 +500,7 @@ begin
       memorystream.Position := 0;
       // SetString(line, PChar(memorystream.Memory), memorystream.Size div SizeOf(Char));
       SetString(line, PAnsiChar(memorystream.Memory), memorystream.Size);
+      memorystream.Free;
 
       lines := TStringList.Create;
       lines.Text := line;
@@ -491,7 +517,8 @@ begin
 
         if (line <> '') and (stage=0) and (line <> '{') then begin // must be the shader name
           tmp := ConvertPath(line+'='+filename);
-          FAvailableShaders.Add(tmp);
+          if FAvailableShaders.IndexOf(tmp) = -1 then
+            FAvailableShaders.Add(tmp);
           continue;
         end;
 
@@ -504,7 +531,7 @@ begin
           continue;
         end;
       end;
-      result := true;
+      result := FAvailableShaders.Count <> 0;
       lines.free;
     end
   else
@@ -519,7 +546,8 @@ begin
 
         if (line <> '') and (stage=0) and (line <> '{') then begin // must be the shader name
           tmp := ConvertPath(line+'='+filename);
-          FAvailableShaders.Add(tmp);
+          if FAvailableShaders.IndexOf(tmp) = -1 then
+            FAvailableShaders.Add(tmp);
           continue;
         end;
 
@@ -532,6 +560,7 @@ begin
           continue;
         end;
       end;
+      FAvailableShaders.SaveToFile('temps\AvailableShaders.txt');
       CloseFile(f);
       exit(true);
     end;
@@ -563,9 +592,9 @@ begin
   result := false;
   params := TStringList.Create;
   k := 0;
-  while k < Fpath.Count do
+  while k < FQ3_base_Path.Count do
   begin
-    path := FPath.Strings[k];
+    path := FQ3_base_Path.Strings[k];
     inc(k);
 
     if FileExists(path+'scripts\'+ filename) then
@@ -1081,7 +1110,7 @@ try
       if name = shaderFile then
         shaderNames.Add(value)
       else begin
-        ReadShadersFromList(shaderFile, shaderNames);
+        ReadShadersFromList(shaderFile, shaderNames, Pk3Zip.GetFileBytes(name));
         shaderNames.Clear;
         shaderFile := FRequiredShaders.Names[i];
         shaderNames.Add(value)
@@ -1089,7 +1118,7 @@ try
     end;
     // read last shader if required
     if shaderNames.Count > 0 then
-      ReadShadersFromList(ExtractFileName(shaderFile), shaderNames);
+      ReadShadersFromList(ExtractFileName(shaderFile), shaderNames, Pk3Zip.GetFileBytes(name));
   end;
 except
   ShowMessage('TShaderManager.ReadRequiredShaders : boolean; error');
@@ -1129,6 +1158,533 @@ end;
       end;
     end;
   end;
+  result := true;
+end;
+
+function TShaderManager.ReadShadersFromList(filename : string; list : TStringList;
+  memorystream: TMemoryStream): boolean;
+
+  function paramCheck(param: TStringList; pos: integer): string;
+  begin
+    if pos >= param.Count then
+       Result := '0'
+    else
+       Result := param[pos];
+  end;
+
+var f : Text;
+    line, tok, remain : string;
+    stage : integer;
+    curLayer : integer;
+    newItem : TShader;
+    tmpInt, i, k : integer;
+    params, lines: TStringList;
+    required : boolean;
+    src, path : string;
+    modIdx, rgbIdx : integer;
+    cast1, cast2 : integer;
+label splitLine;
+begin
+  result := false;
+  params := TStringList.Create;
+
+  if memorystream.Size = 0 then
+    exit;
+
+  memorystream.Position := 0;
+  SetString(line, PAnsiChar(memorystream.Memory), memorystream.Size);
+  memorystream.Free;
+
+  lines := TStringList.Create;
+  lines.Text := line;
+
+  k := 0;
+
+  stage := 0;
+  src := '';
+  while k < lines.Count do begin
+    line := lines.Strings[k];
+    inc(k);
+    src := src + line + #13#10;
+
+  splitLine:
+
+    line := RemoveComment(line);
+
+        if (Copy(line, 1, 2) = '//') then continue;
+
+        if (line <> '') and (stage=0) and (line <> '{') then begin // must be the shader name
+          line := ConvertPath(line);
+          required := (list.IndexOf(line) <> -1);
+          if required then begin
+            src := '';
+            curLayer := 0;
+            newItem := TShader(Add);
+            newItem.Name := line;
+            newItem.ShaderFile := path+'scripts\'+filename;
+            newItem.numOfLayers := 0;
+            newItem.NoMipMap := false;
+            newItem.NoPicMip := false;
+            newItem.Cull := GL_FRONT;
+            newItem.qerId := 0;
+            newItem.qerImage := '';
+            newItem.HasFog := false;
+            newItem.IsSkyBox := false;
+            newItem.TotallyTrans := false;
+            newItem.SortKey := sk_opaque;
+            newItem.effectIndex := -1;
+            newItem.SkyboxType := -1;
+          end;
+          continue;
+        end;
+        if Copy(line, 1, 1) = '{' then begin
+          inc(stage);
+          if (stage = 2) and required then begin
+            inc(curLayer);
+            SetLength(newItem.Layers, curLayer);
+            // initial values
+            newItem.Layers[curLayer-1].DepthFunc := GL_LEQUAL; //Lookup('lequal');
+            newItem.Layers[curLayer-1].DepthWrite := true;
+            newItem.Layers[curLayer-1].AlphaFunc := Lookup('noalpha');
+            newItem.Layers[curLayer-1].AlphaRef := 1;
+            newItem.Layers[curLayer-1].AlphaWave.func := wf_None;
+            newItem.Layers[curLayer-1].doAlphaTest := false;
+            newItem.Layers[curLayer-1].doBlending := false;
+            newItem.Layers[curLayer-1].TexClamp := false;
+            newItem.Layers[curLayer-1].numOfrgbGen := 0;
+            newItem.Layers[curLayer-1].numOftcMods := 0;
+            newItem.Layers[curLayer-1].UseVertexColors := false;
+          end;
+          if Length(line) > 1 then begin
+            line := Trim(Copy(line, 2, Length(line)-1));
+            goto splitLine;
+          end
+          else
+            continue;
+        end;
+        if Copy(line, 1, 1) = '}' then begin
+          dec(stage);
+          if (stage = 1) and required then begin
+            newItem.numOfLayers := curLayer;
+          end;
+
+          // copy last shader source
+          if (stage = 0) and required then begin
+            newItem.Source := src;
+            src := '';
+          end;
+
+          if (stage = 0) then
+            src := ''; // reset tmp source
+          continue;
+        end;
+
+        if (Length(line) > 0) and required then begin
+          line := LowerCase(line);
+          Tokenize(line, params);
+
+          if (stage = 1) then begin
+            if params[0] = 'surfaceparm' then begin
+    {          if params[1] = 'alphashadow' then
+                newItem.Surface := newItem.Surface or SURF_ALPHASHADOW
+              else if params[1] = 'areaportal' then
+                newItem.Contents := newItem.Contents or CONTENTS_AREAPORTAL
+              else if params[1] = 'clusterportal' then
+                newItem.Contents := newItem.Contents or CONTENTS_CLUSTERPORTAL
+              else if params[1] = 'donotenter' then
+                newItem.Contents := newItem.Contents or CONTENTS_DONOTENTER
+              else if params[1] = 'flesh' then
+                newItem.Surface := newItem.Surface or SURF_FLESH
+              else if params[1] = 'fog' then
+                newItem.Contents := newItem.Contents or CONTENTS_FOG
+              else if params[1] = 'lava' then
+                newItem.Contents := newItem.Contents or CONTENTS_LAVA
+              else if params[1] = 'metalsteps' then
+                newItem.Surface := newItem.Surface or SURF_METALSTEPS
+              else if params[1] = 'nodamage' then
+                newItem.Surface := newItem.Surface or SURF_NODAMAGE
+              else if params[1] = 'nodlight' then
+                newItem.Surface := newItem.Surface or SURF_NODLIGHT
+              else if params[1] = 'nodraw' then
+                newItem.Surface := newItem.Surface or SURF_NODRAW
+              else if params[1] = 'nodrop' then
+                newItem.Contents := newItem.Contents or CONTENTS_NODROP
+              else if params[1] = 'noimpact' then
+                newItem.Surface := newItem.Surface or SURF_NOIMPACT
+              else if params[1] = 'nomarks' then
+                newItem.Surface := newItem.Surface or SURF_NOMARKS
+              else if params[1] = 'nolightmap' then
+                newItem.Surface := newItem.Surface or SURF_NOLIGHTMAP
+              else if params[1] = 'nosteps' then
+                newItem.Surface := newItem.Surface or SURF_NOSTEPS
+              else if params[1] = 'nonsolid' then
+                newItem.Surface := newItem.Surface or SURF_NONSOLID
+              else if params[1] = 'origin' then
+                newItem.Contents := newItem.Contents or CONTENTS_ORIGIN
+              else if params[1] = 'playerclip' then
+                newItem.Contents := newItem.Contents or CONTENTS_PLAYERCLIP
+              else if params[1] = 'slick' then
+                newItem.Surface := newItem.Surface or SURF_SLICK
+              else if params[1] = 'slime' then
+                newItem.Contents := newItem.Contents or CONTENTS_SLIME
+              else if params[1] = 'structural' then
+                newItem.Contents := newItem.Contents or CONTENTS_STRUCTURAL
+              else if params[1] = 'trans' then
+                newItem.Contents := newItem.Contents or CONTENTS_TRANSLUCENT
+              else if params[1] = 'water' then
+                newItem.Contents := newItem.Contents or CONTENTS_WATER
+              else if params[1] = 'sky' then
+                newItem.Surface := newItem.Surface or SURF_SKY;
+    }
+              try
+              newItem.Surface := newItem.Surface + LookUp(paramCheck(params, 1));
+              except
+                ShowMessage(paramCheck(params, 1));
+              end;
+              continue;
+            end;
+
+            if params[0] = 'cull' then begin
+               newItem.Cull := LookUp(paramCheck(params, 1));
+               continue;
+            end;
+
+            if params[0] = 'sort' then begin
+              tmpInt := LookUp(paramCheck(params, 1));
+              if tmpInt >   -1 then
+                newItem.SortKey := enSortKey(tmpInt);
+              continue;
+            end;
+
+            if params[0] = 'skyparms' then begin
+              // set the global skyBox class
+              newItem.IsSkyBox := true;
+              skyBoxId := Count-1;
+
+              if (paramCheck(params, 1) = '-') or IsNumeric(paramCheck(params, 1)) or
+                (paramCheck(params, 1) = 'full') then begin // type = sphere
+                newItem.SkyboxType := 1;
+              end
+              else begin                   // type = box
+                // found in q3dm10, q3tourney1
+                newItem.SkyboxType := 2;
+                SetLength(newItem.SkyboxTextureNames, 6);
+                SetLength(newItem.SkyboxTextureIds, 6);
+                newItem.SkyboxTextureNames[0] := ConvertPath(paramCheck(params, 1)+'_rt');
+                newItem.SkyboxTextureNames[1] := ConvertPath(paramCheck(params, 1)+'_lf');
+                newItem.SkyboxTextureNames[2] := ConvertPath(paramCheck(params, 1)+'_ft');
+                newItem.SkyboxTextureNames[3] := ConvertPath(paramCheck(params, 1)+'_bk');
+                newItem.SkyboxTextureNames[4] := ConvertPath(paramCheck(params, 1)+'_up');
+                newItem.SkyboxTextureNames[5] := ConvertPath(paramCheck(params, 1)+'_dn');
+                for i := 0 to 5 do
+                  newItem.SkyboxTextureIds[i] := 0;
+              end;
+              continue;
+            end;
+
+            if params[0] = 'deformvertexes' then begin
+              inc(newItem.numOfDeformVertexes);
+              SetLength(newItem.DeformVertexes, newItem.numOfDeformVertexes);
+              newItem.DeformVertexes[newItem.numOfDeformVertexes-1].deformType := enDeformType(Lookup('def_'+paramCheck(params, 1)));
+              with newItem.DeformVertexes[newItem.numOfDeformVertexes-1] do begin
+                case deformType of
+                  DEFORMVERTEXES_AUTOSPRITE,
+                  DEFORMVERTEXES_AUTOSPRITE2 :
+                    newItem.Cull := GL_NONE;
+                  DEFORMVERTEXES_WAVE :
+                    begin
+                      for i := 0 to 5 do
+                        if i = 1 then
+                          Values[i] := Lookup(paramCheck(params, 2+i))
+                        else
+                          Values[i] := StrToFloat(paramCheck(params, 2+i));
+                    end;
+                  DEFORMVERTEXES_NORMAL :
+                    begin
+                      // wave func at i=1
+                      for i := 0 to 4 do
+                        if i = 1 then
+                          Values[i] := Lookup(paramCheck(params, 2+i))
+                        else
+                          Values[i] := StrToFloat(paramCheck(params, 2+i));
+                    end;
+                  DEFORMVERTEXES_BULGE :
+                    begin
+                      for i := 0 to 2 do
+                        Values[i] := StrToFloat(paramCheck(params, 2+i));
+                    end;
+                  DEFORMVERTEXES_MOVE :
+                    begin
+                      for i := 0 to 7 do
+                        if i = 3 then
+                          Values[i] := Lookup(paramCheck(params, 2+i))
+                        else
+                          Values[i] := StrToFloat(paramCheck(params, 2+i));
+                    end;
+                end;
+              end;
+              continue;
+            end;
+
+            if params[0] = 'fogparms' then begin
+              newItem.HasFog := true;
+              // color params with parens !!!
+              newItem.Fog.Red := StrToFloat(paramCheck(params, 2));
+              newItem.Fog.Green := StrToFloat(paramCheck(params, 3));
+              newItem.Fog.Blue := StrToFloat(paramCheck(params, 4));
+              newItem.Fog.Alpha := 1;
+              newItem.Fog.Distance := StrToFloatDef(paramCheck(params, 6), 0.0);  //params[6]
+              continue;
+            end;
+
+            if params[0] = 'qer_editorimage' then begin
+              newItem.qerImage := ConvertPath(paramCheck(params, 1));
+              continue;
+            end;
+
+            if params[0] = 'nopicmip' then begin
+              newItem.NoPicMip := true;
+              continue;
+            end;
+            if params[0] = 'nomipmap' then begin
+              newItem.NoMipMap := true;
+              continue;
+            end;
+
+            if params[0] = 'portal' then begin
+              continue;
+            end;
+          end // (stage = 1)
+          else if (Stage = 2) then begin
+            if params[0] = 'depthfunc' then begin
+              newItem.Layers[curLayer-1].DepthFunc := LookUp(paramCheck(params, 1));
+              if newItem.Layers[curLayer-1].DepthFunc = -1 then
+                newItem.Layers[curLayer-1].DepthFunc := GL_LEQUAL;
+              continue;
+            end;
+            if params[0] = 'depthwrite' then begin
+              if (curLayer = 1) and (newItem.TotallyTrans) then
+                newItem.TotallyTrans := false;
+              newItem.Layers[curLayer-1].DepthWrite := true;
+              continue;
+            end;
+            if params[0] = 'map' then begin
+              newItem.Layers[curLayer-1].animFreq := 0; // no animation
+              newItem.Layers[curLayer-1].animFrameTime := 0;
+              newItem.Layers[curLayer-1].numOfTextures := 1;
+              SetLength(newItem.Layers[curLayer-1].TextureNames,1);
+              newItem.Layers[curLayer-1].TextureNames[0] := ConvertPath(paramCheck(params, 1));
+              continue;
+            end;
+            if params[0] = 'clampmap' then begin
+              newItem.Layers[curLayer-1].animFreq := 0; // no animation
+              newItem.Layers[curLayer-1].animFrameTime := 0;
+              newItem.Layers[curLayer-1].numOfTextures := 1;
+              SetLength(newItem.Layers[curLayer-1].TextureNames,1);
+              newItem.Layers[curLayer-1].TextureNames[0] := ConvertPath(paramCheck(params, 1));
+              //newItem.Layers[curLayer-1].TexClamp := true;
+              continue;
+            end;
+            if params[0] = 'animmap' then begin
+              newItem.Layers[curLayer-1].animFreq := StrToFloat(paramCheck(params, 1)); // animation speed
+              newItem.Layers[curLayer-1].animFrameTime := Round(1000.0 / newItem.Layers[curLayer-1].animFreq);
+
+              newItem.Layers[curLayer-1].numOfTextures := params.Count-2;
+              SetLength(newItem.Layers[curLayer-1].TextureNames,params.Count-2);
+              for i := 0 to params.Count-3 do begin
+                newItem.Layers[curLayer-1].TextureNames[i] := ConvertPath(paramCheck(params, 2+i));
+              end;
+              continue;
+            end;
+            if params[0] = 'detail' then begin
+              continue;
+            end;
+            if params[0] = 'alphafunc' then begin
+              newItem.Layers[curLayer-1].AlphaFunc := Lookup(paramCheck(params, 1));
+              newItem.Layers[curLayer-1].doAlphaTest := true;
+              newItem.Layers[curLayer-1].DepthWrite := false;
+              if newItem.Layers[curLayer-1].AlphaFunc = GL_GREATER then
+                newItem.Layers[curLayer-1].AlphaRef := 0
+              else
+                newItem.Layers[curLayer-1].AlphaRef := 0.5;
+              continue;
+            end;
+            if params[0] = 'alphagen' then begin
+              if params.Count = 5 then begin // must be a wave
+                with newItem.Layers[curLayer-1].AlphaWave  do begin
+                  func := enWave(Lookup(paramCheck(params, 2)));
+                  base := StrToFloat(paramCheck(params, 3));
+                  amp := StrToFloat(paramCheck(params, 4));
+                  phase := StrToFloat(paramCheck(params, 5));
+                  freq := StrToFloat(paramCheck(params, 6));
+                end;
+              end;
+              continue;
+            end;
+            if params[0] = 'tcmod' then begin
+              inc(newItem.Layers[curLayer-1].numOftcmods);
+              SetLength(newItem.Layers[curLayer-1].tcmods, newItem.Layers[curLayer-1].numOftcmods);
+              modIdx := newItem.Layers[curLayer-1].numOftcmods-1;
+              tmpInt := Lookup(paramCheck(params, 1));
+              if tmpInt = -1 then
+                tmpInt := 0;
+              newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].modType := entcmod(tmpInt);
+              case tmpInt of
+                1 : newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[0] := StrToFloat(paramCheck(params, 2)); // rotate
+                2,3 : begin // scale, scroll
+                        for i := 0 to 1 do
+                          newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[i] := StrToFloat(paramCheck(params, 2+i));
+                      end;
+                4 : begin // stretch
+                      with newItem.Layers[curLayer-1].tcMods[modIdx].Wave  do begin
+                        func := enWave(Lookup(paramCheck(params, 2)));
+                        base := StrToFloat(paramCheck(params, 3));
+                        amp := StrToFloat(paramCheck(params, 4));
+                        phase := StrToFloat(paramCheck(params, 5));
+                        freq := StrToFloat(paramCheck(params, 6));
+                      end;
+                    end;
+                5 : begin // transform
+                      for i := 0 to 5 do
+                        newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[i] := StrToFloat(paramCheck(params, 2+i));
+                    end;
+                6 : begin // turb
+                      // first param is unused
+                      newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[0] := 0; //StrToFloat(params[2]);
+                      newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[1] := StrToFloat(paramCheck(params, 3));
+                      newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[2] := StrToFloat(paramCheck(params, 4));
+                      newItem.Layers[curLayer-1].tcmods[newItem.Layers[curLayer-1].numOftcmods-1].Values[3] := StrToFloat(paramCheck(params, 5));
+                    end;
+              end;
+              continue;
+            end;
+            if params[0] = 'rgbgen' then begin
+              rgbIdx := newItem.Layers[curLayer-1].numOfrgbgen;
+              inc(newItem.Layers[curLayer-1].numOfrgbgen);
+              SetLength(newItem.Layers[curLayer-1].rgbGen, rgbIdx+1);
+              newItem.Layers[curLayer-1].rgbGen[rgbIdx].rgbGType := enRGBGen(LookUp(paramCheck(params, 1)));
+
+              case newItem.Layers[curLayer-1].rgbGen[rgbIdx].rgbGType of
+                rgbGen_Wave :
+                  begin
+                    with newItem.Layers[curLayer-1].rgbGen[rgbIdx].Wave  do begin
+                      func := enWave(Lookup(paramCheck(params, 2)));
+                      base := StrToFloat(paramCheck(params, 3));
+                      amp := StrToFloat(paramCheck(params, 4));
+                      phase := StrToFloat(paramCheck(params, 5));
+                      freq := StrToFloat(paramCheck(params, 6));
+                    end;
+                    newItem.Layers[curLayer-1].UseVertexColors := false;
+                    FillChar(newItem.Layers[curLayer-1].curColor, 4, 255); // white
+                  end;
+                rgbGen_Identity :
+                  begin
+                    newItem.Layers[curLayer-1].UseVertexColors := false;
+                    FillChar(newItem.Layers[curLayer-1].curColor, 4, 255);
+                  end;
+                rgbGen_IdentityLightning :
+                  begin
+                    newItem.Layers[curLayer-1].UseVertexColors := false;
+                    FillChar(newItem.Layers[curLayer-1].curColor, 4, 128);
+                    ChangeGamma(newItem.Layers[curLayer-1].curColor, gamma);
+
+                  end;
+                rgbGen_Entity,
+                rgbGen_OneMinusEntity : // @@@@ must be adjusted if Entity data is available
+                  begin
+                    newItem.Layers[curLayer-1].UseVertexColors := false;
+                    FillChar(newItem.Layers[curLayer-1].curColor, 4, 255); // white
+                  end;
+               rgbGen_Vertex,
+               rgbGen_OneMinusVertex :  newItem.Layers[curLayer-1].UseVertexColors := true;
+               rgbGen_LightningDiffuse : newItem.Layers[curLayer-1].UseVertexColors := true; // @@@ eval in setColor
+              end;
+              continue;
+            end;
+
+            if params[0] = 'tcgen' then begin
+              tmpInt := LookUp(paramCheck(params, 1));
+              if tmpInt = -1 then begin
+                newItem.Layers[curLayer-1].tcGen := tcGen_standard;
+                // param - array is missing for this function
+              end
+              else
+                newItem.Layers[curLayer-1].tcGen := entcGen(tmpInt);
+              continue;
+            end;
+
+            if params[0] = 'blendfunc' then begin
+              newItem.Layers[curLayer-1].doBlending := true;
+              if (paramCheck(params, 1) = 'add') or (paramCheck(params, 1) = 'gl_add')then begin
+                newItem.Layers[curLayer-1].SrcBlend := GL_ONE;
+                newItem.Layers[curLayer-1].DestBlend := GL_ONE;
+                newItem.Layers[curLayer-1].DepthWrite := false;
+              end
+              else if paramCheck(params, 1) = 'filter' then begin
+                newItem.Layers[curLayer-1].SrcBlend := GL_DST_COLOR;
+                newItem.Layers[curLayer-1].DestBlend := GL_ZERO;
+                newItem.Layers[curLayer-1].DepthWrite := false;
+              end
+              else if paramCheck(params, 1) = 'blend' then begin
+                newItem.Layers[curLayer-1].SrcBlend := GL_SRC_ALPHA;
+                newItem.Layers[curLayer-1].DestBlend := GL_ONE_MINUS_SRC_ALPHA;
+                newItem.Layers[curLayer-1].DepthWrite := false;
+              end
+              else begin
+                newItem.Layers[curLayer-1].SrcBlend :=  LookUp(paramCheck(params, 1));
+                newItem.Layers[curLayer-1].DestBlend := LookUp(paramCheck(params, 2));
+                newItem.Layers[curLayer-1].DepthWrite := false;
+    {            newItem.Layers[curLayer-1].DepthWrite := (newItem.Layers[curLayer-1].SrcBlend = GL_ONE) and
+                                                         (newItem.Layers[curLayer-1].SrcBlend = GL_ZERO) and
+                                                         (curLayer = 1);}
+
+              end;
+              if (curLayer = 1)  then begin
+                if (newItem.Layers[curLayer-1].DestBlend = GL_ONE) AND (newItem.Layers[curLayer-1].DestBlend = GL_ZERO) then
+                  newItem.Layers[curLayer-1].doBlending := false;
+                newItem.TotallyTrans := newItem.Layers[curLayer-1].DestBlend <> GL_ZERO;
+              end;
+    {          if (curLayer = 1) and (newItem.sortKey = sk_opaque) then begin
+                if (newItem.Layers[curLayer-1].SrcBlend = GL_ONE) and (newItem.Layers[curLayer-1].SrcBlend = GL_ONE)then
+                  newItem.SortKey := sk_additive
+                else begin
+                  newItem.SortKey := sk_trans;
+                  newItem.Cull := GL_NONE;
+                  newItem.Layers[curLayer-1].DepthWrite := false;
+                end;
+              end;
+
+              if (newItem.Layers[curLayer-1].SrcBlend = GL_ZERO) and (newItem.Layers[curLayer-1].SrcBlend = GL_SRC_COLOR) then begin
+                rgbIdx := newItem.Layers[curLayer-1].numOfrgbgen;
+                inc(newItem.Layers[curLayer-1].numOfrgbgen);
+                SetLength(newItem.Layers[curLayer-1].rgbGen, rgbIdx+1);
+                newItem.Layers[curLayer-1].rgbGen[rgbIdx].rgbGType := RGBGEN_IDENTITY;
+              end
+              else if (newItem.Layers[curLayer-1].SrcBlend = GL_DST_COLOR) and (newItem.Layers[curLayer-1].SrcBlend = GL_ZERO) then begin
+                rgbIdx := newItem.Layers[curLayer-1].numOfrgbgen;
+                inc(newItem.Layers[curLayer-1].numOfrgbgen);
+                SetLength(newItem.Layers[curLayer-1].rgbGen, rgbIdx+1);
+                newItem.Layers[curLayer-1].rgbGen[rgbIdx].rgbGType := RGBGEN_IDENTITY;
+              end;
+              }
+    {          if ((newItem.Surface and 8388608) =  8388608) then begin
+    //            newItem.Layers[curLayer-1].DepthWrite := false;
+                newItem.Layers[curLayer-1].doAlphaTest := true;
+                newItem.Layers[curLayer-1].AlphaRef := 0.5;
+                newItem.SortKey := SK_NEAREST;
+              end;
+              }
+              continue;
+            end; // end blendfunc
+      end;
+      break;
+    end;
+    //end FileExits
+  end;
+  //end While
+
+  lines.Free;
+  params.Free;
   result := true;
 end;
 

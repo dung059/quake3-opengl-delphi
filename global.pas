@@ -3,11 +3,57 @@
 interface
 
 uses OpenGL, Windows, Console, q3bsp, q3shaders, q3sound, cam, System.Classes,
-  Q3MD3, Textures, q3timer, q3Threads, System.Zip, Q3Pk3Read;
+  Q3MD3, Textures, q3timer, q3Threads, System.Zip, Q3Pk3Read,
+  System.Win.ScktComp;
 
 type
   Tdrawtypes = (FLASHINIT, FLASHDRAW, BSPINIT, BSPDRAW, DRAWLOAD, DRAWTEST,
     DRAWNONE, DRAWMENU);
+
+  TQ3Protocol = record
+    len: Int64;
+    // để st sẽ mất time gửi
+    // st: TMemoryStream;
+    mess: String[128];
+    user: String[128];
+    pass: String[128];
+  end;
+
+  TBuffer = class(TMemoryStream)
+    Code, Pack: TQ3Protocol;
+    FromID, ToID: Integer;
+  public
+    procedure Append(Data: Pointer; len: Integer);
+    procedure Compact;
+    function Expand(len: Integer): Pointer;
+    function GetRemaining: Integer;
+    function GetWorkData: Pointer;
+  end;
+
+  TBuffers = class
+  public
+    RecvBuffer: TBuffer;
+    SendBuffer: TBuffer;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  TGameServerSocket = class
+  public
+    // OnClientConnent event handler
+    procedure ClientConnected(Sender: TObject; Socket: TCustomWinSocket);
+    // OnClientDisconnect event handler
+    procedure ClientDisconnected(Sender: TObject; Socket: TCustomWinSocket);
+    // OnClientRead event handler
+    procedure ReadData(Sender: TObject; Socket: TCustomWinSocket);
+    // OnClientWrite event handler
+    procedure SendData(Sender: TObject; Socket: TCustomWinSocket);
+    procedure SendDataTo(Socket: TCustomWinSocket; var Data: TBuffer;
+      len: Integer);
+    // procedure MessageTo(Client: TClient; Pack: TPackData);
+    procedure MessageTo(Client: TClientSocket; ServerID: Integer;
+      Pack: TQ3Protocol);
+  end;
 
 var
   h_Wnd: HWND; // Global window handle
@@ -54,7 +100,7 @@ var
   splashId: cardinal = 0;
 
   lastKeyPress: cardinal;
-  startTime, endTime: int64;
+  startTime, endTime: Int64;
   RenderTime: double;
 
   // geometry
@@ -74,6 +120,8 @@ var
   thread: Q3Thread;
   checkthread: Boolean;
   gTimer: THiResTimer;
+  Q3_BASE_PATH: TStringList;
+  ClientSocket: TClientSocket;
 
 const
   WND_TITLE = 'Quake 3 Game [dung059]';
@@ -115,6 +163,7 @@ const
 
 function CheckExtensions: Boolean;
 function IndexofMaps(findstr: String; Inlist: TStringList): Integer;
+function findcommand(command: string; findin: String): Boolean;
 procedure LoadRailgun;
 procedure drawORGLine();
 
@@ -135,6 +184,27 @@ begin
   result := true;
 end;
 
+function findcommand(command: string; findin: String): Boolean;
+var
+  li: TStringList;
+  i: Integer;
+begin
+  result := false;
+  li := TStringList.Create;
+  try
+    li.Delimiter := '|';
+    li.DelimitedText := findin;
+    for i := 0 to li.Count - 1 do
+      if command = li.Strings[i] then
+      begin
+        result := true;
+        Break;
+      end;
+  finally
+    li.Free;
+  end;
+end;
+
 function LoadAllBSPmaps(Path: string; mods: Boolean): Boolean;
 var
   sr: TSearchRec;
@@ -148,7 +218,7 @@ begin
     if FindFirst(dir, faAnyFile, sr) = 0 then
     begin
       repeat
-        //LIST_BSP_NAME.Add(fullpath + sr.Name);
+        // LIST_BSP_NAME.Add(fullpath + sr.Name);
       until FindNext(sr) <> 0;
       FindClose(sr);
       result := true;
@@ -157,7 +227,7 @@ begin
   else
   begin
     fullpath := IncludeTrailingBackslash(Path);
-    //ScanFolder(fullpath, '*.*', LIST_BSP_NAME);
+    // ScanFolder(fullpath, '*.*', LIST_BSP_NAME);
   end;
 end;
 
@@ -264,13 +334,216 @@ var
   i: Integer;
   md3check: TMD3Model;
   s: string;
-  xpath: TStringlist;
   stream, temp: TMemoryStream;
   tmp: TPk3Colection;
 
+  { TBuffer }
+
+procedure TBuffer.Append(Data: Pointer; len: Integer);
+begin
+  Position := Size;
+  WriteBuffer(Data, len);
+end;
+
+procedure TBuffer.Compact;
+var
+  NewSize: Integer;
+begin
+  if Position < 1 then
+    Exit;
+  NewSize := GetRemaining;
+  if NewSize > 0 then
+  begin
+    Move(GetWorkData^, Memory^, NewSize);
+    Size := NewSize;
+  end
+  else
+    Clear;
+end;
+
+function TBuffer.Expand(len: Integer): Pointer;
+var
+  OldSize: Integer;
+begin
+  OldSize := Size;
+  Size := OldSize + len;
+  result := PByte(Memory) + OldSize;
+end;
+
+function TBuffer.GetRemaining: Integer;
+begin
+  result := Size - Position;
+end;
+
+function TBuffer.GetWorkData: Pointer;
+begin
+  result := PByte(Memory) + Position;
+end;
+
+{ TBuffers }
+
+constructor TBuffers.Create;
+begin
+  inherited;
+  RecvBuffer := TBuffer.Create;
+  SendBuffer := TBuffer.Create;
+end;
+
+destructor TBuffers.Destroy;
+begin
+  RecvBuffer.Free;
+  SendBuffer.Free;
+  inherited;
+end;
+
+{ TGameServerSocket }
+
+procedure TGameServerSocket.ClientConnected(Sender: TObject;
+  Socket: TCustomWinSocket);
+begin
+  Socket.Data := TBuffers.Create;
+end;
+
+procedure TGameServerSocket.ClientDisconnected(Sender: TObject;
+  Socket: TCustomWinSocket);
+begin
+  TBuffers(Socket.Data).Free;
+  Socket.Data := nil;
+end;
+
+procedure TGameServerSocket.MessageTo(Client: TClientSocket; ServerID: Integer;
+  Pack: TQ3Protocol);
+var
+  Send: TBuffer;
+begin
+  Send.Code := Pack;
+  Send.FromID := ServerID;
+  Send.ToID := Client.Tag;
+  Send.Pack := Pack;
+
+  SendDataTo(Client.Socket, Send, SizeOf(Send));
+end;
+
+procedure TGameServerSocket.ReadData(Sender: TObject; Socket: TCustomWinSocket);
+var
+  RecvBuffer: TBuffer;
+  OldSize, len: Integer;
+  Receive: TBuffer;
+begin
+  len := Socket.ReceiveLength;
+  if len < 1 then
+    Exit;
+
+  RecvBuffer := TBuffers(Socket.Data).RecvBuffer;
+  OldSize := RecvBuffer.Size;
+
+  try
+    len := Socket.ReceiveBuf(RecvBuffer.Expand(len)^, len);
+  except
+    len := 0;
+  end;
+
+  if len < 1 then
+  begin
+    RecvBuffer.Size := OldSize;
+    Exit;
+  end;
+
+  RecvBuffer.Position := 0;
+  try
+    while RecvBuffer.GetRemaining >= SizeOf(TBuffer) do
+    begin
+      RecvBuffer.ReadBuffer(Receive, SizeOf(TBuffer));
+    end;
+  finally
+    RecvBuffer.Compact;
+  end;
+end;
+
+procedure TGameServerSocket.SendData(Sender: TObject; Socket: TCustomWinSocket);
+var
+  SendBuffer: TBuffer;
+  len: Integer;
+begin
+  SendBuffer := TBuffers(Socket.Data).SendBuffer;
+  SendBuffer.Position := 0;
+  try
+    repeat
+      len := SendBuffer.GetRemaining;
+      if len < 1 then
+        Break;
+      try
+        len := Socket.SendBuf(SendBuffer.GetWorkData^, len);
+      except
+        len := 0;
+      end;
+      if len < 1 then
+        Break;
+      SendBuffer.Seek(len, soCurrent);
+    until false;
+  finally
+    SendBuffer.Compact;
+  end;
+end;
+
+procedure TGameServerSocket.SendDataTo(Socket: TCustomWinSocket;
+  var Data: TBuffer; len: Integer);
+var
+  SendBuffer: TBuffer;
+  Ptr: PByte;
+  Sent: Integer;
+begin
+  if Socket = nil then
+    Exit;
+  SendBuffer := TBuffers(Socket.Data).SendBuffer;
+  if SendBuffer.Size > 0 then
+  begin
+    SendBuffer.Append(Data, len);
+    Exit;
+  end;
+  Ptr := PByte(@Data);
+  while len > 0 do
+  begin
+    Sent := Socket.SendBuf(Ptr^, len);
+    if Sent < 1 then
+      Break;
+    Inc(Ptr, Sent);
+    Dec(len, Sent);
+  end;
+  if len > 0 then
+    SendBuffer.Append(Ptr, len);
+end;
+
 initialization
 
-  xpath := TStringlist.Create;
+if not FileExists(ExtractFilePath(ParamStr(0)) + 'Q3MapView.ini') then
+begin
+  ini := TINIFile.Create(ExtractFilePath(ParamStr(0)) + 'Q3MapView.ini');
+  ini.WriteString('Quake3', 'Folder_1', 'E:\GAME\Quake III\baseq3\');
+  ini.WriteString('Quake3', 'Folder_2',
+    'D:\DUNG\project\delphi\OpenGL\Quake3\My\Elements\Mods\');
+  ini.WriteString('Quake3', 'BSP', 'q3dm1.bsp');
+  ini.WriteString('Quake3', 'MD3', 'railgun.md3');
+  ini.WriteInteger('Screen', 'Width', 1600);
+  ini.WriteInteger('Screen', 'Height', 840);
+  ini.WriteInteger('Screen', 'ColorDepth', 16);
+  ini.WriteFloat('Screen', 'Gamma', 2);
+  ini.WriteBool('Screen', 'Fullscreen', true);
+  ini.WriteInteger('Camera', 'FOV', 90);
+  ini.WriteInteger('Camera', 'DepthOfView', 4000);
+  ini.WriteInteger('Detail', 'Tesselation', 2);
+  ini.WriteInteger('Camera', 'Speed', 200);
+  ini.WriteInteger('Camera', 'Acceleration', 2000);
+  ini.WriteInteger('Camera', 'Friction', 1000);
+  ini.WriteInteger('Skybox', 'Resolution', 18);
+  ini.WriteInteger('Sound', 'MusicVolume', 64);
+  ini.WriteInteger('Sound', 'FXVolume', 64);
+  ini.Free;
+end;
+
+Q3_BASE_PATH := TStringList.Create;
+Q3_BASE_PATH.Sorted := true;
+Q3_BASE_PATH.Duplicates := dupIgnore;
 
 ThreadStatus := INACTIVE;
 
@@ -280,60 +553,39 @@ for i := 1 to 255 do
 begin
   s := ini.ReadString('Quake3', 'Folder_' + IntToStr(i), '');
   if (s <> '') and directoryexists(s) then
-    xpath.Add(s);
+    Q3_BASE_PATH.Add(s);
 end;
-xpath.Add('temps\');
-Pk3Zip := TZipPK3.Create(xpath);
+CreateDir('temps');
+Q3_BASE_PATH.Add('temps\');
 
 BSP_NAME := ini.ReadString('Quake3', 'BSP', 'q3dm1.bsp');
 MD3_NAME := ini.ReadString('Quake3', 'MD3', 'railgun.md3');
-
-tmp := Pk3Zip.IndexOf(BSP_NAME);
-
-if tmp.Count <> 0 then
-  begin
-    temp := Pk3Zip.ReadFileInPK3(tmp, BSP_NAME);
-//    stream := TFileStream.Create(Pk3Zip.fallfile[i].FileName, fmCreate);
-//    try
-//      stream.CopyFrom(temp, temp.Size);
-//    finally
-//      stream.Free;
-//    end;
-  end;
-
-
 SCREEN_WIDTH := ini.ReadInteger('Screen', 'Width', 640);
 SCREEN_HEIGHT := ini.ReadInteger('Screen', 'Height', 480);
 COLOR_DEPTH := ini.ReadInteger('Screen', 'ColorDepth', 16);
 TEXTURE_DEPTH := ini.ReadInteger('Screen', 'TextureDepth', 16);
 Gamma := ini.ReadFloat('Screen', 'Gamma', 2);
 FullScreen := ini.ReadBool('Screen', 'Fullscreen', true);
-
 FOV := ini.ReadInteger('Camera', 'FOV', 90);
 DEPTH_OF_VIEW := ini.ReadInteger('Camera', 'DepthOfView', 4000);
-
 Tesselation := ini.ReadInteger('Detail', 'Tesselation', 2);
-
 CAM_SPEED := ini.ReadInteger('Camera', 'Speed', 200);
 CAM_ACCEL := ini.ReadInteger('Camera', 'Acceleration', 2000);
 CAM_FRICT := ini.ReadInteger('Camera', 'Friction', 1000);
-
 SKY_RESOLUTION := ini.ReadInteger('Skybox', 'Resolution', 18);
-
 MUSIC_VOL := ini.ReadInteger('Sound', 'MusicVolume', 64);
 FX_VOL := ini.ReadInteger('Sound', 'FXVolume', 64);
-
 // DumpErrors := ini.ReadBool('Debug', 'DumpErrors', false);
+ini.Free;
 
 // có thể sửa để thêm nhiều đường dẫn đến thư mục chứa data
 // LoadAllBSPmaps(QUAKE_FOLDER, false);
 // LoadAllBSPmaps(MODS_QUAKE_FOLDER, true);
 
-//BSP_MAP_INDEX := IndexofMaps(BSP_NAME, LIST_BSP_NAME);
+// BSP_MAP_INDEX := IndexofMaps(BSP_NAME, LIST_BSP_NAME);
 
-if not Assigned(Q3Level) then
-  Q3Level := TQuake3BSP.Create;
-
+//if not Assigned(Q3Level) then
+//  Q3Level := TQuake3BSP.Create;
 
 // i := (messagedlg('Custom dialog: ban muon load map: ' + LIST_BSP_NAME.Strings[BSP_MAP_INDEX + 1]
 // ,mtConfirmation, [mbYes,mbAll,mbCancel], 0));
@@ -343,15 +595,14 @@ drawgame := FLASHINIT;
 // LoadRailgun;
 XRot := 0;
 YRot := 0;
-md3check.LoadModel
-  ('D:\DUNG\project\delphi\OpenGL\Quake3\My\Elements\Maps\scorn-robotic\models\robot\face\face.md3');
+// md3check.LoadModel
+// ('D:\DUNG\project\delphi\OpenGL\Quake3\My\Elements\Maps\scorn-robotic\models\robot\face\face.md3');
 
-//Pk3Zip.MyReadPK3
-//  ('D:\DUNG\project\delphi\OpenGL\Quake3\My\Elements\Maps\lvlworld.com\hate.pk3');
+// Pk3Zip.MyReadPK3
+// ('D:\DUNG\project\delphi\OpenGL\Quake3\My\Elements\Maps\lvlworld.com\hate.pk3');
 
 finalization
 
-ini.Free;
-xpath.Free;
+Q3_BASE_PATH.Free;
 
 end.

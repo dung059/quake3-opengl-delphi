@@ -1,4 +1,4 @@
-//----------------------------------------------------------------------------
+﻿//----------------------------------------------------------------------------
 //
 // Author      : Jan Horn
 // Email       : jhorn@global.co.za
@@ -195,7 +195,6 @@ var
   C : LongWord;
   Line : ^LongWord;
   ResStream : TResourceStream;      // used for loading from resource
-  pk3: TPk3Colection;
 begin
   result :=FALSE;
   JPG:=TJPEGImage.Create;
@@ -223,11 +222,7 @@ begin
   begin
     try
       if LoadFromStream then
-        begin
-          pk3 := Pk3Zip.IndexOf(Filename);
-          if pk3.ItemIndex <> -1 then
-            JPG.LoadFromStream(Pk3Zip.ReadFileInPK3(pk3, pk3.Items[pk3.ItemIndex].Full));
-        end
+         JPG.LoadFromStream(Pk3Zip.GetFileBytes(Filename))
         else
           JPG.LoadFromFile(Filename);
     except
@@ -297,7 +292,6 @@ var
   Temp: Byte;
 
   ResStream : TResourceStream;      // used for loading from resource
-  pk3: TPk3Colection;
   memory: TMemoryStream;
 
   // Copy a pixel from source to dest and Swap the RGB color values
@@ -351,9 +345,7 @@ begin
     else
     if LoadFromStream then
       begin
-        pk3 := Pk3Zip.IndexOf(Filename);
-          if pk3.ItemIndex <> -1 then
-            memory := Pk3Zip.ReadFileInPK3(pk3, pk3.Items[pk3.ItemIndex].Full);
+        memory := Pk3Zip.GetFileBytes(Filename);
         memory.ReadBuffer(TGAHeader, SizeOf(TGAHeader));
         result :=TRUE;
       end
@@ -373,7 +365,7 @@ begin
        (TGAHeader.ImageType <> 10) then  { Compressed RGB }
     begin
       Result := False;
-      CloseFile(tgaFile);
+      if not LoadFromStream then CloseFile(tgaFile);
       MessageBox(0, PChar('Couldn''t load "'+ Filename +'". Only 24 and 32bit TGA supported.'), PChar('TGA File Error'), MB_OK);
       Exit;
     end;
@@ -382,7 +374,7 @@ begin
     if TGAHeader.ColorMapType <> 0 then
     begin
       Result := False;
-      CloseFile(TGAFile);
+      if not LoadFromStream then CloseFile(TGAFile);
       MessageBox(0, PChar('Couldn''t load "'+ Filename +'". Colormapped TGA files not supported.'), PChar('TGA File Error'), MB_OK);
       Exit;
     end;
@@ -396,7 +388,7 @@ begin
     if ColorDepth < 24 then
     begin
       Result := False;
-      CloseFile(TGAFile);
+      if not LoadFromStream then CloseFile(TGAFile);
       MessageBox(0, PChar('Couldn''t load "'+ Filename +'". Only 24 and 32 bit TGA files supported.'), PChar('TGA File Error'), MB_OK);
       Exit;
     end;
@@ -427,7 +419,7 @@ begin
         if bytesRead <> ImageSize then
         begin
           Result := False;
-          CloseFile(TGAFile);
+          if not LoadFromStream then CloseFile(TGAFile);
           MessageBox(0, PChar('Couldn''t read file "'+ Filename +'".'), PChar('TGA File Error'), MB_OK);
           Exit;
         end
@@ -670,7 +662,6 @@ end;
 
 function LoadQuakeTexture(path, name : string; var Texture : GLUINT;  NoPicMip, NoMipMap : boolean) : boolean;
 var ext, fullname, s : string; k, i: integer;
-  pk3: TPk3Colection;
   JPG : TJPEGImage;
   BMP : TBitmap;
   Data : Array of LongWord;
@@ -691,6 +682,7 @@ begin
     k := 0;
     while k < Pk3Zip.BASE_PATH.count do
     begin
+      // thực ra không cần tìm từng file, vì hàm LoadTexture đã check rồi
       fullname := path + name + '.tga';
       if FileExists(fullname) then begin
         result := LoadTexture(fullname, Texture, false, false, NoPicMip, NoMipMap);
@@ -710,23 +702,18 @@ begin
       // load in pk3 file
       // for I := 0 to length(Pk3Zip.FILES_IN_PK3) - 1 do
       fullname := path + name + '.tga';
-      pk3 := Pk3Zip.IndexOf(fullname);
-      if pk3.ItemIndex <> -1 then begin
-        s := 'temps/' + ExtractFileName(pk3.Pk3FileName) + '\' + pk3.Items[pk3.ItemIndex].Full;
-        s := StringReplace(s, '/', '\', [rfReplaceAll]);
+      if Pk3Zip.GetFileName(fullname) then begin
         result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
         // result := LoadTextureFromStream(Pk3Zip.ReadFileInPK3(pk3, fullname), Texture, NoPicMip, NoMipMap);
         Break;
       end;
       fullname := path + name + '.jpg';
-      pk3 := Pk3Zip.IndexOf(fullname);
-      if pk3.ItemIndex <> -1 then begin
+      if Pk3Zip.GetFileName(fullname) then begin
         result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
         Break;
       end;
       fullname := path + name + '.bmp';
-      pk3 := Pk3Zip.IndexOf(fullname);
-      if pk3.ItemIndex <> -1 then begin
+      if Pk3Zip.GetFileName(fullname) then begin
         result := LoadTexture(fullname, Texture, false, true, NoPicMip, NoMipMap);
         Break;
       end;

@@ -1,29 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<Transactions>
-    <Transaction>2018/10/18 17:45:39.000.465,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/18 17:46:06.000.739,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\fmod1.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/18 17:46:23.000.922,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\fmod.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\fmod1.pas</Transaction>
-    <Transaction>2018/10/18 18:50:31.000.857,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/18 18:50:44.000.439,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\ExtOpenGL.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
     <Transaction>2018/10/18 19:09:29.000.610,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapView.dproj=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapViewModify.dproj</Transaction>
-    <Transaction>2018/10/20 10:34:19.000.085,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/20 10:34:42.000.953,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\glFlash.pas</Transaction>
-    <Transaction>2018/10/21 08:04:54.000.923,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Bass.pas</Transaction>
-    <Transaction>2018/10/21 10:36:42.000.785,=D:\DUNG\project\delphi\OpenGL\Quake3\My\unit\Model\Milkshape3D.ASCII.pas</Transaction>
-    <Transaction>2018/10/21 10:36:42.000.859,=D:\DUNG\project\delphi\OpenGL\Quake3\My\unit\Model\Q3MD3.pas</Transaction>
-    <Transaction>2018/10/21 10:36:42.000.731,=D:\DUNG\project\delphi\OpenGL\Quake3\My\unit\Model\Animate.pas</Transaction>
-    <Transaction>2018/10/21 10:37:04.000.430,D:\DUNG\project\delphi\OpenGL\Quake3\My\unit\Model\Milkshape3D.ASCII.pas=</Transaction>
-    <Transaction>2018/10/21 10:37:13.000.218,D:\DUNG\project\delphi\OpenGL\Quake3\My\unit\Model\Animate.pas=</Transaction>
-    <Transaction>2018/10/21 16:45:26.000.274,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3Win.pas</Transaction>
-    <Transaction>2018/10/21 16:47:58.000.191,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3GUI.pas</Transaction>
-    <Transaction>2018/10/21 17:47:29.000.037,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3GUI.pas=</Transaction>
-    <Transaction>2018/10/21 17:47:34.000.374,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3Win.pas=</Transaction>
-    <Transaction>2018/10/21 17:47:58.000.760,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Setup.pas</Transaction>
-    <Transaction>2018/10/24 18:29:59.000.019,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/24 18:30:15.000.501,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\q3Thread.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/24 18:33:02.000.005,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\q3Threads.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\q3Thread.pas</Transaction>
-    <Transaction>2018/10/28 18:27:19.000.524,=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas</Transaction>
-    <Transaction>2018/10/28 18:27:47.000.410,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Unit2.pas=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3Pk3Read.pas</Transaction>
   </Transactions>
 </BorlandProject>

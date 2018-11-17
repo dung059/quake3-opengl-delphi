@@ -66,7 +66,7 @@ type
 
 implementation
 
-uses Global, Winapi.Windows;
+uses Global, Winapi.Windows, System.Classes;
 
 constructor TSoundEngine.Create;
 var caps: Cardinal;
@@ -165,8 +165,19 @@ end;
 
 function TSoundEngine.LoadSample(inmemory: Boolean; name: ansistring): integer;
 var Stream1   : HSTREAM;
+  fs: TMemoryStream;
+  memp: Pointer;
 begin
-  Stream1 := BASS_StreamCreateFile(FALSE, PChar(name), 0, 0, 0);
+  if inmemory then
+    begin
+      fs := Pk3Zip.GetFileBytes(name);
+      GetMem(memp, fs.size);
+      fs.Read(memp^, fs.Size);
+      Stream1 := BASS_StreamCreateFile(true, memp, 0, fs.Size, 0);
+      fs.Free;
+    end
+  else
+    Stream1 := BASS_StreamCreateFile(FALSE, PChar(name), 0, 0, 0);
   if Stream1 = 0 then
   begin
     //MessageBox(0, 'Can''t create digital sound stream. Music file might be missing', 'Sound', MB_OK or MB_ICONERROR);

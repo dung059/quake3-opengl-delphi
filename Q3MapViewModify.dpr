@@ -10,6 +10,8 @@ uses
   Dialogs,
   fmodtypes,
   fmoderrors,
+  Jpeg,
+  Graphics,
   Q3BSP in 'Q3BSP.pas',
   Cam in 'Cam.pas',
   Textures in 'Textures.pas',
@@ -27,10 +29,11 @@ uses
   ExtOpenGL in 'ExtOpenGL.pas',
   glFlash in 'glFlash.pas',
   Bass in 'Bass.pas',
-  Q3MD3 in '..\My\unit\Model\Q3MD3.pas',
   Setup in 'Setup.pas',
   q3Threads in 'q3Threads.pas',
-  Q3Pk3Read in 'Q3Pk3Read.pas';
+  Q3Pk3Read in 'Q3Pk3Read.pas',
+  Q3MD3 in 'Q3MD3.pas',
+  Q3client in 'Q3client.pas';
 
 var
  (* h_Wnd  : HWND;                     // Global window handle
@@ -70,6 +73,50 @@ begin
     Cons.AddMsg('lightmaps off');
 end;
 
+// this procedure will capture the screen content into the suppliet ABitmap parameter.
+procedure CaptureScreen(ABitmap: Graphics.TBitmap);
+var
+  vDesktopDC: HDC;   // variable to store the device context handle of desktop window
+begin
+  // get the device context handle of current desktop window
+  vDesktopDC := GetWindowDC(GetActiveWindow);   //GetDesktopWindow
+  try
+      // adjust the dimension and format of the supplied bitmap to match the screen
+      ABitmap.PixelFormat := pf24bit;
+      ABitmap.Height := Screen.Height;
+      ABitmap.Width := Screen.Width;
+
+      // draw the content of desktop into ABitmap
+      BitBlt(ABitmap.Canvas.Handle, 0, 0, ABitmap.Width, ABitmap.Height, vDesktopDC, 0, 0, SRCCOPY);
+  finally
+    // mark that we have done with the desktop device context
+    ReleaseDC(GetActiveWindow, vDesktopDC);
+  end;
+end;
+procedure CaptureScreenToFile(const AFilename: string);
+var
+  vJpg: TJpegImage;
+  vBmp: TBitmap;
+begin
+  // create temporary bitmap
+  vBmp := TBitmap.Create;
+  try
+    CaptureScreen(vBmp);
+    // create Jpg image object
+    vJpg := TJpegImage.Create;
+    try
+      vJpg.Assign(vBmp);
+      // compress the image to have quality 70% of original
+      vJpg.CompressionQuality := 70;
+      // save the captured screen into a file in jpg format
+      vJpg.SaveToFile(AFileName);
+    finally
+      vJpg.Free;  //destroy the jpg image object
+    end;
+  finally
+    vBmp.Free; // destroy temporary bitmap
+  end;
+end;
 (*
 procedure ShowHelp;
 begin
@@ -198,14 +245,13 @@ begin
 //            ,mtConfirmation, [mbYes,mbAll,mbCancel], 0) =  6) then begin
     keys[VK_INSERT] := false;
     inputs := IntToStr(Pk3Zip.BSP_LIST.IndexOf(BSP_NAME) + 1);
-    if not InputQuery('Nhap vao so map ban muon tu!', '0--' + Inttostr(Pk3Zip.BSP_LIST.Count - 1), inputs) then exit;
-//    Pk3Zip.PK3_INDEX.ItemIndex := StrToIntDef(inputs, 0);
-      {InputBox('Nhap vao so map ban muon tu!' ,
-      '0--' + IntToStr(LIST_BSP_NAME.Count), InttoStr(BSP_MAP_INDEX + 1)), BSP_MAP_INDEX);}
+    ShowCursor(true);
+    if not InputQuery('Nhap vao so map ban muon tu!', '0--' + Inttostr(Pk3Zip.BSP_LIST.Count - 1), inputs) then
+      begin
+        ShowCursor(false);
+        exit;
+      end;
 
-    //Loaded := not Loaded;
-
-    //inc(BSP_MAP_INDEX);
     if StrToInt(inputs) >= Pk3Zip.BSP_LIST.Count then
       inputs := '0';
 //       Pk3Zip.PK3_INDEX.ItemIndex := 0;
@@ -214,14 +260,19 @@ begin
     //BSP_NAME := LIST_BSP_NAME.Strings[Random(LIST_BSP_NAME.Count - 1)];
     Camera.ResetPosition;
     Drawgame := FLASHINIT;
-
+    ShowCursor(false);
     //end;
   end;
   if (keys[VK_SCROLL]) then    //phim ScrLk
   begin
     Camera.screenlock := Not(Camera.screenlock);
     if Camera.screenlock then   // Không tạo cảm giác bị giật màn hình
-      SetCursorPos((SCREEN_WIDTH  DIV 2) + SCREEN_LEFT, (SCREEN_HEIGHT DIV 2) + SCREEN_TOP);
+      begin
+        SetCursorPos((SCREEN_WIDTH  DIV 2) + SCREEN_LEFT, (SCREEN_HEIGHT DIV 2) + SCREEN_TOP);
+        ShowCursor(false);
+      end
+    else
+      ShowCursor(true);
     keys[VK_SCROLL] :=FALSE;
   end;
   // Toggle wireframe mode
@@ -251,6 +302,13 @@ begin
     keys[VK_HOME] :=FALSE;
   end;
 
+  if (keys[VK_F9]) then    //
+  begin
+    CreateDir('screenshot');
+    CaptureScreenToFile(format('screenshot\screenshot_%s.jpg', [formatdatetime('dd-mm-yy_hh-mm-ss', now())]));
+
+    keys[VK_F9] :=FALSE;
+  end;
 end;
 
 procedure SplashScreen(h_dc : HDC);
@@ -485,9 +543,9 @@ begin
       Camera.ResetPosition;
 
       //Loaded := Q3Level.LoadBSP(QUAKE_FOLDER , BSP_NAME, BSP_MAP_INDEX);
-      if not Q3Level.LoadBSP('' , BSP_NAME, Pk3Zip.PK3_INDEX.ItemIndex, true) then PostQuitMessage(0);
+      if not Q3Level.LoadBSP('' , BSP_NAME, true) then PostQuitMessage(0);
 
-      Player.LoadPlayer('\models\players\anarki', 'default');
+      Player.LoadPlayer('models\players\anarki', 'default');
       Player.SetAnim(0);
       //LoadRailgun;
 
@@ -516,7 +574,7 @@ begin
   if drawgame = FLASHDRAW then
     gluPerspective(FOV, Width/Height, 1.0, 300);  // Do the perspective calculations. Last value = max clipping depth
   if drawgame in [FLASHINIT, BSPDRAW, BSPINIT] then
-    gluPerspective(FOV, Width/Height, 1.0, 4 * DEPTH_OF_VIEW);  // Do the perspective calculations. Last value = max clipping depth
+    gluPerspective(FOV, Width/Height, 1.0, DEPTH_OF_VIEW);  // Do the perspective calculations. Last value = max clipping depth
 //  PerspectiveGL(FOV, Width/Height, 4.0, DEPTH_OF_VIEW);
 //   glFrustum(-4.0, 4.0, -2.704225, 2.704225, 4.0, 4096.0);  //GLQuake Mode
 
@@ -696,6 +754,7 @@ begin
         begin
           Camera.move_mouse_x := LOWORD(lParam);
           Camera.move_mouse_x := HIWORD(lParam);
+          Camera.mouseclick := not Camera.mouseclick;
         end;
     else
       Result := DefWindowProc(hWnd, Msg, wParam, lParam);    // Default result if nothing happens
@@ -816,7 +875,7 @@ begin
 
     dwExStyle := WS_EX_APPWINDOW or       // Top level window
                  WS_EX_WINDOWEDGE;        // Border with a raised edge
-    ShowCursor(true);                    // Turn of the cursor (gets in the way)
+    ShowCursor(false);                    // Turn of the cursor (gets in the way)
   end;
 
   // Attempt to create the actual window
@@ -987,7 +1046,10 @@ begin
       if (GetForegroundWindow = h_Wnd) then
         begin
           if drawgame = BSPDRAW then
-            Camera.MoveCameraByMouse;
+            begin
+              //ShowCursor(false);
+              Camera.MoveCameraByMouse;
+            end;
 
          oldPos := Camera.position;
          //ProcessKeys;
@@ -1007,8 +1069,10 @@ begin
 
       if (keys[VK_ESCAPE]) then           // If user pressed ESC then set finised TRUE
         begin
+          ShowCursor(true);
           if (messagedlg('AN HUY - THUY TRANG muon thoat', mtConfirmation, [mbYes,mbCancel], 0)) = 6 then
             finished := True;
+          ShowCursor(false);
           keys[VK_ESCAPE] := false;
         end
       else
@@ -1021,10 +1085,15 @@ end;
 
 procedure startmap();
 begin
+  Pk3Zip := TZipPK3.Create(Q3_BASE_PATH, BSP_NAME);
+//  Pk3Zip.IndexOf(BSP_NAME);
+//  if Pk3Zip.IsOpenIndex = -1 then
+//    Pk3Zip.IndexOf(Pk3Zip.BSP_LIST.Strings[0]);
+
   if not Assigned(frust) then
     frust := TFrustum.Create;
   if not Assigned(ShaderManager) then
-    ShaderManager := TShaderManager.Create(Pk3Zip.BASE_PATH);
+    ShaderManager := TShaderManager.Create(Pk3Zip);
   if not Assigned(Camera) then
     Camera := TCamera.Create;
   Camera.max_speed := CAM_SPEED;

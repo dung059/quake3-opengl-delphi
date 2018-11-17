@@ -111,7 +111,7 @@ type
     // procedure DisplayErrors;
     function PlayerPosition: TBSPPosition; // position of the player
     function FindLeaf(vPos: TVector3f): integer;
-    function LoadBSP(const Folder, FileName: String; index: integer; inmemory: boolean): boolean;
+    function LoadBSP(const Folder, FileName: String; inmemory: boolean): boolean;
     procedure RenderBSP(const Pos: TVector3f; leafIndex: integer);
     function checkMove(sp, ep, extent: TVector3f): TBSPMove;
     procedure checkMoveNode(sf, ef: single; sp, ep: TVector3f; node: integer;
@@ -553,6 +553,8 @@ begin
     begin
       v := l[i];
       p := l[i + 1];
+      P := StringReplace(p, '.', FormatSettings.DecimalSeparator, [rfReplaceAll]);
+      P := StringReplace(p, ',', FormatSettings.DecimalSeparator, [rfReplaceAll]);
       if v = 'origin' then
         Positions[numOfPositions - 1].Position := StrToVector3f(p)
       else if v = 'angle' then
@@ -582,7 +584,7 @@ begin
         pi := Pos(#32, p);
         if pi > 0 then
           p := RightStr(p, Length(p) - pi);
-        fn := '\' + p
+        fn := p
       end
       else if v = 'message' then
         Cons.AddMsg('MESSAGE ' + p);
@@ -597,7 +599,7 @@ begin
     begin
       Cons.AddMsg('MUSIC: ' + fn);
       if Sound.BASSInit then
-        snd := Sound.LoadSample(false, fn)
+        snd := Sound.LoadSample(true, fn)
       else
         snd := Sound.LoadSample(fn, true, false);
       // SetVector(0,0,0), false, true, MUSIC_VOL); // flags are missing
@@ -850,7 +852,7 @@ end;
 *)
 // Load all of the .bsp data for the level
 function TQuake3BSP.LoadBSP(const Folder, FileName: String;
-  index: integer; inmemory: boolean): boolean;
+  inmemory: boolean): boolean;
 var
   f: File;
   i, j, k, l, size, tempInt: integer;
@@ -876,10 +878,7 @@ begin
   result := false;
 
   if inmemory then
-  begin
-    memory := Pk3Zip.ReadFileInPK3(Pk3Zip.IndexOf(FileName), FileName);
-    memory.Position := 0;
-  end;
+    memory := Pk3Zip.GetFileBytes(FileName);
 
 
 
@@ -943,7 +942,7 @@ begin
 
     s := GetTickCount();
     // Reset ShaderManager required list
-    FShaderManager.RequiredShaders.Clear;
+    // FShaderManager.RequiredShaders.Clear;
     for i := 0 to numOfTextures - 1 do
     begin // Go through all of the textures
       TextureInfo[i].TextureName :=
@@ -965,7 +964,7 @@ begin
             .TextureName);
       end;
     end;
-    // FShaderManager.RequiredShaders.SaveToFile('C:\RequiredShaders.txt');
+    FShaderManager.RequiredShaders.SaveToFile('temps\RequiredShaders.txt');
     Cons.AddMsg('Required shaders = ' +
       IntToStr(ShaderManager.RequiredShaders.Count));
     // for i := 0 to ShaderManager.RequiredShaders.Count-1 do

@@ -83,8 +83,8 @@ begin
   FInput := '';
   MakeRasterFont;
   FLogLines := FLines-2-5;
-  LoadTexture('images\FontLines2.tga', texFont, false, false);
-  Fnt.Load('images\GUI\Test.tga');
+  LoadTexture('temps\images\FontLines2.tga', texFont, false, false);
+  Fnt.Load('temps\images\Test.tga');
 end;
 
 destructor TConsole.Destroy;
