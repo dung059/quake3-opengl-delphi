@@ -362,7 +362,7 @@ begin
 
     // Only support 24, 32 bit images
     if (TGAHeader.ImageType <> 2) AND    { TGA_RGB }
-       (TGAHeader.ImageType <> 10) then  { Compressed RGB }
+       (TGAHeader.ImageType <> 10)then  { Compressed RGB }
     begin
       Result := False;
       if not LoadFromStream then CloseFile(tgaFile);

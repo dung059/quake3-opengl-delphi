@@ -236,20 +236,26 @@ begin
   glFinish;
 
   //exit;
-  inc(frameflash);
-  if frameflash > 300 then
-    drawgame := BSPINIT;
-//    with Q3Thread.Create(true) do
-//      begin
-//        SetFunc('Q3LevelLoad');
-//        Priority := tpLower;
-//        Resume;
-//        drawgame := BSPINIT;
-//        Suspend;
-//        Terminate;
-//        checkthread := true;
-//      end;
+{  inc(frameflash);
+  //if frameflash > 300 then
+    //drawgame := BSPINIT;
+  if ThreadStatus = INACTIVE then
+    with TQ3Thread.Create(true) do
+      begin
+        SetFunc('Q3LevelLoad');
+        Priority := tpLower;
+        ThreadStatus := ACTIVE;
+        Resume;
+        //drawgame := BSPINIT;
+        //Suspend;
+        //Terminate;
+        //checkthread := true;
+      end;
   //  DrawFlash := false;
+}
+
+  if ThreadStatus = SUCCESS then
+    drawgame := BSPINIT;
 end;
 
 {------------------------------------------------------------------}
@@ -307,6 +313,16 @@ begin
   gluQuadricNormals(MyQuadratic, GLU_SMOOTH);			// Create Smooth Normals (NEW)
   gluQuadricTexture(MyQuadratic, GL_TRUE);				// Create Texture Coords (NEW)
 
+  if drawgame = FLASHINIT then
+    begin
+      drawgame := FLASHDRAW;
+      with TQ3Thread.Create(true) do
+      begin
+        SetFunc('InitLoad');
+        Resume;
+      end;
+
+    end;
 end;
 
 initialization

@@ -42,7 +42,6 @@ var
 *)  
   TimedFPS : cardinal;
 
-
 {$R *.RES}
 
 procedure CheckCollision(sp, ep : TVector3f); forward;
@@ -53,6 +52,8 @@ procedure glResizeWnd(Width, Height : Integer); forward;
 
 procedure ShowInitial;
 begin
+  if not Assigned(Cons) then
+    exit;
 
   if SimpleRender then
     Cons.AddMsg('simple rendering')
@@ -260,6 +261,11 @@ begin
     //BSP_NAME := LIST_BSP_NAME.Strings[Random(LIST_BSP_NAME.Count - 1)];
     Camera.ResetPosition;
     Drawgame := FLASHINIT;
+    with TQ3Thread.Create(true) do
+      begin
+        SetFunc('Q3LevelLoad');
+        Resume;
+      end;
     ShowCursor(false);
     //end;
   end;
@@ -394,7 +400,6 @@ begin
   FLASHINIT:
     begin
       FlashglInit();
-      drawgame := FLASHDRAW;
     end;
    FLASHDRAW:
       begin
@@ -462,54 +467,12 @@ begin
 
   // load all other init first
 
-  if not Assigned(Cons) then
-    begin
-      Cons := TConsole.Create(SCREEN_WIDTH, SCREEN_HEIGHT);
-      Cons.AddMsg('OpenGL vendor ' + glGetString(GL_VENDOR));
-      Cons.AddMsg('OpenGL renderer ' + glGetString(GL_RENDERER));
-      Cons.AddMsg('OpenGL version ' + glGetString(GL_VERSION));
-      Cons.AddMsg('Supported OpenGL extensions ' + glGetString(GL_EXTENSIONS));
-    end;
-  if not Assigned(Sound) then
-    begin
-      Sound := TSoundEngine.Create;
-      // load walk sound
-      Camera.NormalSound  := Sound.LoadSample('\sound\player\footsteps\step1.wav', false, false);
-      channel := Sound.NewEmitter(Camera.NormalSound, SetVector(0,0,0), false, true);
-      Camera.Channel := channel;
-      Camera.MetalSound  := Sound.LoadSample('\sound\player\footsteps\clank1.wav', false, false);
-      Camera.WaterSound  := Sound.LoadSample('\sound\player\footsteps\splash1.wav', false, false);
-      // fmod
-      Sound.LoadSample('\sound\player\footsteps\step2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\step3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\step4.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank4.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash4.wav', false, false);
-      // bass
-      Sound.LoadSample(false, '\sound\player\footsteps\step2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\step3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\step4.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank4.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash4.wav');
-      Camera.NormalSound  := Sound.LoadSample(false, '\sound\player\footsteps\step1.wav');
-      Camera.MetalSound  := Sound.LoadSample(false, '\sound\player\footsteps\clank1.wav');
-      Camera.WaterSound  := Sound.LoadSample(false, '\sound\player\footsteps\splash1.wav');
-    end;
-
   lastKeyPress := GetTickCount;
 
   //DrawIt := true;
   ShowInitial;
 
-  if drawgame in [FLASHINIT, BSPINIT] then
+  if drawgame in [BSPINIT] then
     begin
       glClearColor(0.0, 0.0, 0.0, 0.0); 	   // Black Background
       glShadeModel(GL_SMOOTH);                 // Enables Smooth Color Shading
@@ -527,8 +490,6 @@ begin
       glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
       checkthread := false;
-      if drawgame = BSPINIT then
-        drawgame := BSPDRAW;
 
       glResizeWnd(SCREEN_WIDTH, SCREEN_HEIGHT); // DOV !!!!!
   end;
@@ -542,6 +503,7 @@ begin
       Camera.screenlock := true;
       Camera.ResetPosition;
 
+      {
       //Loaded := Q3Level.LoadBSP(QUAKE_FOLDER , BSP_NAME, BSP_MAP_INDEX);
       if not Q3Level.LoadBSP('' , BSP_NAME, true) then PostQuitMessage(0);
 
@@ -556,6 +518,7 @@ begin
         Camera.position.Z := Position.z + 0;
         Camera.ApplyCamera;
       end;
+      }
       currentLeaf := Q3Level.FindLeaf(Camera.Position);
       SetCursorPos((SCREEN_WIDTH  DIV 2) + SCREEN_LEFT, (SCREEN_HEIGHT DIV 2) + SCREEN_TOP);
     end;
@@ -707,7 +670,8 @@ begin
             DumpMsg := 'PAUSE (press ''P'' to continue)'//+ IntToStr(FPScount)
           else
             DumpMsg := '';
-          SetWindowText(h_Wnd, PChar(WND_TITLE + format(
+          if Assigned(Pk3Zip) then
+            SetWindowText(h_Wnd, PChar(WND_TITLE + format(
                 '[%s index: %d\%d | FPS: %d, rot(X/Y: %0.8f-%0.8f) CAM(%0.8f|%0.8f|%0.8f) VIEW(%0.8f|%0.8f|%0.8f)]',
                 [BSP_NAME, Pk3Zip.BSP_LIST.IndexOf(BSP_NAME), Pk3Zip.BSP_LIST.Count - 1, gTimer.GetFPS,
                 //X/Y
@@ -1043,6 +1007,13 @@ begin
 //        Camera.MoveCameraByMouse; // ShowCursor(false);
 //      end;// else ShowCursor(true);
 
+      if drawgame = FLASHINIT then
+        with TQ3Thread.Create(true) do
+          begin
+            SetFunc('InitLoad');
+            Resume;
+          end;
+
       if (GetForegroundWindow = h_Wnd) then
         begin
           if drawgame = BSPDRAW then
@@ -1085,25 +1056,11 @@ end;
 
 procedure startmap();
 begin
-  Pk3Zip := TZipPK3.Create(Q3_BASE_PATH, BSP_NAME);
-//  Pk3Zip.IndexOf(BSP_NAME);
-//  if Pk3Zip.IsOpenIndex = -1 then
-//    Pk3Zip.IndexOf(Pk3Zip.BSP_LIST.Strings[0]);
-
-  if not Assigned(frust) then
-    frust := TFrustum.Create;
-  if not Assigned(ShaderManager) then
-    ShaderManager := TShaderManager.Create(Pk3Zip);
   if not Assigned(Camera) then
     Camera := TCamera.Create;
   Camera.max_speed := CAM_SPEED;
   Camera.acceleration := CAM_ACCEL;
   Camera.friction := CAM_FRICT;
-
-  if not Assigned(Q3Level) then
-    Q3Level := TQuake3BSP.Create;
-  Q3Level.ShaderManager := ShaderManager;
-  Q3Level.Camera := Camera;
 end;
 
 procedure shutdownmap();

@@ -38,6 +38,7 @@ type
     procedure MyReadPK3(FilePK3name: TPk3Colection); overload;
     procedure SearchDuplicates();
     function IndexOf(const Filename: String): integer;
+    function ReadFileInPK3(pk3: TPk3Colection; Filename: String): TMemoryStream;
   public
     IsOpenIndex: Integer;
     //PK3_SELECT : TPk3Colection;
@@ -49,7 +50,6 @@ type
     function GetFileBytes(Index: integer): TMemoryStream; overload;
     function GetFileBytes(Filename: String): TMemoryStream; overload;
     function GetFileName(Filename: String): Boolean;
-    function ReadFileInPK3(pk3: TPk3Colection; Filename: String): TMemoryStream;
     procedure Log(const sMsg: string); overload;
     procedure Log(filename: String; const sMsg: string); overload;
     procedure SaveBytesToFile(const Data: TBytes; const FileName: string);
@@ -100,6 +100,7 @@ begin
   // in my laptop [core i5] 1s reader 721 files to list
   // 25s for read 72 file pk3 - total: 1.5gb
   fZipFile := TZipFile.Create;
+  //fZipFile.Open('D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\baseQ3\Mods\mfq3_1.pk3', zmRead);
   IsOpenIndex := -1;
   for i := 0 to count - 1 do
     MyReadPK3(Items[i]);
@@ -252,6 +253,7 @@ begin
       //xFilename := StringReplace(FilePK3name.Pk3FileName, '/', '\', [rfReplaceAll]);
       try
         fZipFile.Close;
+        Sleep(5);
         fZipFile.Open(FilePK3name.Pk3FileName, zmRead);
       except
         on E: Exception do

@@ -141,7 +141,8 @@ type TShaderManager = class(TCollection)
     FLoadedTextures : TIntegerHash;
     FQ3_base_Path : TStringList;
     FTempScript: TStringList;
-    function GetItem(Index : integer) : TShader;
+    function GetItem(Index : integer) : TShader; overload;
+    function GetItem(filename : string) : integer; overload;
     function ScanShader(path, filename : string; memorystream: TMemoryStream) : boolean; // get available shaders
     function ReadShadersFromList(filename : string; list : TStringList) : boolean; overload;
     function ReadShadersFromList(filename : string; list : TStringList; memorystream: TMemoryStream) : boolean; overload;
@@ -352,7 +353,8 @@ end;
 
 function TShaderManager.GetItem(Index : integer) : TShader;
 begin
-  result := inherited Items[Index] as TShader;
+  if (Index < count) and (Index <> -1) then
+    result := inherited Items[Index] as TShader;
 end;
 
 // TShaders ********************************************************************
@@ -389,7 +391,7 @@ begin
       begin
         if LowerCase(fPk3Zip.Items[i].FileNames[k].Ext) = '.shader' then
         begin
-          temp := fPk3Zip.ReadFileInPK3(Pk3Zip.Items[i], fPk3Zip.Items[i].FileNames[k].Full);
+          temp := fPk3Zip.GetFileBytes(fPk3Zip.Items[i].FileNames[k].Full);
           ScanShader(fPk3Zip.Items[i].Pk3FileName, fPk3Zip.Items[i].FileNames[k].Full, temp);
     //      fPk3Zip.Log(format('FileName: ' + #9 + '%s' + #9 + 'ext: ' + #9 + '%s' + #9 +
     //        'PK3: ' + #9 + '%s' + #9 + 'Time: ' + #9 + '%s' + #$D#$A,
@@ -421,6 +423,7 @@ var
   i, j: Integer;
   value, name: string;
   me: TMemoryStream;
+  shaderNames : TStringList;
 begin
   inherited Create(TShader);
 
@@ -443,6 +446,18 @@ begin
     begin
       FTempScript.LoadFromFile('temps\scripts\script.shader');
       ScanShader('', 'temps\scripts\script.shader', nil);
+      shaderNames := TStringList.Create;
+      for I := 0 to FAvailableShaders.Count - 1 do
+        begin
+          value := FAvailableShaders.Strings[i];
+          name := splitList(value);
+          if value = 'temps\scripts\script.shader' then
+            shaderNames.Add(name)
+    //      LoadTexture(name, false, false);
+        end;
+      ReadShadersFromList('script.shader', shaderNames);
+      //ReadRequiredShaders;
+      shaderNames.Free;
     end
   else
   begin
@@ -451,13 +466,7 @@ begin
     CreateDir('temps\scripts');
     //FTempScript.SaveToFile('temps\scripts\script.shader');
   end;
-  //ReadShadersFromList('script.shader', FAvailableShaders);
-  for I := 0 to FAvailableShaders.Count - 1 do
-    begin
-//      value := FAvailableShaders.Strings[i];
-//      name := splitList(value);
-//      LoadTexture(name, false, false);
-    end;
+
   if FAvailableShaders.Count = 0 then
     with FPk3Zip.Items[FPk3Zip.IsOpenIndex] do
       begin
@@ -484,6 +493,16 @@ begin
     end;
 
   inherited Destroy;
+end;
+
+function TShaderManager.GetItem(filename: string): integer;
+var
+  i: Integer;
+begin
+  for I := 0 to count - 1 do
+    if Items[i].Name = filename then
+      exit(i);
+  Exit(-1);
 end;
 
 function TShaderManager.ScanShader(path, filename : string; memorystream: TMemoryStream) : boolean;
@@ -560,9 +579,9 @@ begin
           continue;
         end;
       end;
-      FAvailableShaders.SaveToFile('temps\AvailableShaders.txt');
+      FAvailableShaders.SaveToFile('temps\scripts\AvailableShaders.txt');
       CloseFile(f);
-      exit(true);
+      exit(FAvailableShaders.Count <> 0);
     end;
 end;
 
@@ -617,7 +636,9 @@ begin
         if (line <> '') and (stage=0) and (line <> '{') then begin // must be the shader name
           line := ConvertPath(line);
           required := (list.IndexOf(line) <> -1);
-          if required then begin
+          // read in file
+          newItem := GetItem(GetItem(line));
+          if required and (GetItem(line) = -1) then begin
             src := '';
             curLayer := 0;
             newItem := TShader(Add);
@@ -1102,6 +1123,7 @@ begin
 
 try
   //LoadTGATexture('Initial', FGeneralTexture, true, false, false);
+
   if FRequiredShaders.Count > 0 then begin
     shaderFile := FRequiredShaders.Names[0];
     for i := 0 to FRequiredShaders.Count-1 do begin
@@ -1110,7 +1132,10 @@ try
       if name = shaderFile then
         shaderNames.Add(value)
       else begin
-        ReadShadersFromList(shaderFile, shaderNames, Pk3Zip.GetFileBytes(name));
+        if shaderFile = 'temps\scripts\script.shader' then
+          ReadShadersFromList(ExtractFileName(shaderFile), shaderNames)
+        else
+          ReadShadersFromList(shaderFile, shaderNames, Pk3Zip.GetFileBytes(name));
         shaderNames.Clear;
         shaderFile := FRequiredShaders.Names[i];
         shaderNames.Add(value)
@@ -1118,7 +1143,10 @@ try
     end;
     // read last shader if required
     if shaderNames.Count > 0 then
-      ReadShadersFromList(ExtractFileName(shaderFile), shaderNames, Pk3Zip.GetFileBytes(name));
+      if shaderFile = 'temps\scripts\script.shader' then
+        ReadShadersFromList(ExtractFileName(shaderFile), shaderNames)
+      else
+        ReadShadersFromList(ExtractFileName(shaderFile), shaderNames, Pk3Zip.GetFileBytes(name));
   end;
 except
   ShowMessage('TShaderManager.ReadRequiredShaders : boolean; error');
@@ -1126,6 +1154,16 @@ end;
   shaderNames.Free;
   // bind textures
   if Count > 0 then begin // any shaders loaded?
+    shaderNames := TStringList.Create;
+    shaderNames.Sorted := true;
+    shaderNames.Duplicates := dupIgnore;
+    for i := 0 to Count-1 do begin
+      shaderNames.Add(Items[i].Name);
+      shaderNames.SaveToFile('temps\scripts\shaderitemname.txt');
+    end;
+    shaderNames.Free;
+
+    if FPk3Zip.IsOpenIndex <> -1 then
     for i := 0 to Count-1 do begin
       if Items[i].qerImage <> '' then begin
         items[i].qerId := LoadTexture(items[i].qerImage, Items[i].NoPicMip, Items[i].NoMipMap);
@@ -1135,6 +1173,8 @@ end;
           if Items[i].Layers[j].numOfTextures > 0 then begin
             for t := 0 to Items[i].Layers[j].numOfTextures-1 do begin
               if Copy(Items[i].Layers[j].TextureNames[t], 1, 1) <> '$' then begin // must be a texture name
+                if i mod 50 = 0 then
+                   name := {FPath + }Items[i].Layers[j].TextureNames[t];
                 name := {FPath + }Items[i].Layers[j].TextureNames[t];
                 Items[i].Layers[j].TextureId[t] := LoadTexture(name, Items[i].NoPicMip, Items[i].NoMipMap);
                 if Items[i].Layers[j].TextureId[t] = 0 then
@@ -1216,7 +1256,9 @@ begin
         if (line <> '') and (stage=0) and (line <> '{') then begin // must be the shader name
           line := ConvertPath(line);
           required := (list.IndexOf(line) <> -1);
-          if required then begin
+          // read in memory
+          newItem := GetItem(GetItem(line));
+          if required and (GetItem(line) = -1) then begin
             src := '';
             curLayer := 0;
             newItem := TShader(Add);

@@ -3,12 +3,10 @@
 interface
 
 uses OpenGL, Windows, Console, q3bsp, q3shaders, q3sound, cam, System.Classes,
-  Q3MD3, Textures, q3timer, q3Threads, System.Zip, Q3Pk3Read,
+  Q3MD3, Textures, q3timer, System.Zip, Q3Pk3Read,
   System.Win.ScktComp;
 
 type
-  Tdrawtypes = (FLASHINIT, FLASHDRAW, BSPINIT, BSPDRAW, DRAWLOAD, DRAWTEST,
-    DRAWNONE, DRAWMENU);
 
   TQ3Protocol = record
     len: Int64;
@@ -81,7 +79,6 @@ var
   // DumpErrors : boolean = false;
 
   CubeTex, BackgroundTex: GLuint;
-  drawgame: Tdrawtypes;
   Pause: Boolean = false;
   SortFaces: Boolean = true;
   LockingAvailable: Boolean = false;
@@ -116,8 +113,6 @@ var
   YRot, XRot, ZRot: glFloat; // Y Rotation
   Xcoord, Ycoord, Zcoord: Integer;
 
-  ThreadStatus: TThreadStatus;
-  thread: Q3Thread;
   checkthread: Boolean;
   gTimer: THiResTimer;
   Q3_BASE_PATH: TStringList;
@@ -545,8 +540,6 @@ Q3_BASE_PATH := TStringList.Create;
 Q3_BASE_PATH.Sorted := true;
 Q3_BASE_PATH.Duplicates := dupIgnore;
 
-ThreadStatus := INACTIVE;
-
 ini := TINIFile.Create(ExtractFilePath(ParamStr(0)) + 'Q3MapView.ini');
 
 for i := 1 to 255 do
@@ -590,7 +583,6 @@ ini.Free;
 // i := (messagedlg('Custom dialog: ban muon load map: ' + LIST_BSP_NAME.Strings[BSP_MAP_INDEX + 1]
 // ,mtConfirmation, [mbYes,mbAll,mbCancel], 0));
 // InputBox('abc', 'tess', '40');
-drawgame := FLASHINIT;
 
 // LoadRailgun;
 XRot := 0;

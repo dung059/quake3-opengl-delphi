@@ -942,7 +942,7 @@ begin
 
     s := GetTickCount();
     // Reset ShaderManager required list
-    // FShaderManager.RequiredShaders.Clear;
+    //FShaderManager.RequiredShaders.Clear;
     for i := 0 to numOfTextures - 1 do
     begin // Go through all of the textures
       TextureInfo[i].TextureName :=
@@ -964,7 +964,7 @@ begin
             .TextureName);
       end;
     end;
-    FShaderManager.RequiredShaders.SaveToFile('temps\RequiredShaders.txt');
+    FShaderManager.RequiredShaders.SaveToFile('temps\scripts\RequiredShaders.txt');
     Cons.AddMsg('Required shaders = ' +
       IntToStr(ShaderManager.RequiredShaders.Count));
     // for i := 0 to ShaderManager.RequiredShaders.Count-1 do
@@ -3293,7 +3293,11 @@ begin
   try
     face := @Faces[FaceIndex];
 
+    if shaderId = 47 then
+       shaderId := 47;
     shader := ShaderManager.Items[shaderId];
+    if not Assigned(shader) then
+      exit;
     if GL_ARB_multitexture then
       glActiveTextureARB(GL_TEXTURE1_ARB);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);

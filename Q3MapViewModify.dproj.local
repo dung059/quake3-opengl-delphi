@@ -2,5 +2,28 @@
 <BorlandProject>
 	<Transactions>
     <Transaction>2018/10/18 19:09:29.000.610,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapView.dproj=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapViewModify.dproj</Transaction>
-  </Transactions>
+  </Transactions>  <ProjectSortOrder AutoSort="0" SortType="0">
+    <File Path="Bass.pas"/>
+    <File Path="Cam.pas"/>
+    <File Path="Console.pas"/>
+    <File Path="ExtOpenGL.pas"/>
+    <File Path="fmod.pas"/>
+    <File Path="Frustum.pas"/>
+    <File Path="glFlash.pas"/>
+    <File Path="global.pas"/>
+    <File Path="math3d.pas"/>
+    <File Path="Q3BSP.pas"/>
+    <File Path="Q3client.pas"/>
+    <File Path="Q3MD3.pas"/>
+    <File Path="Q3Pk3Read.pas"/>
+    <File Path="q3shaders.pas"/>
+    <File Path="q3SkyBox.pas"/>
+    <File Path="q3sound.pas"/>
+    <File Path="q3Threads.pas"/>
+    <File Path="q3timer.pas"/>
+    <File Path="q3types.pas"/>
+    <File Path="qsortunit.pas"/>
+    <File Path="Setup.pas"/>
+    <File Path="Textures.pas"/>
+  </ProjectSortOrder>
 </BorlandProject>
