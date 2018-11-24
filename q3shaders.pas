@@ -3,7 +3,7 @@ unit q3shaders;
 
 interface
 
-uses StdCtrls, sysutils, classes, OpenGL, Hashes, Q3Pk3Read;
+uses StdCtrls, sysutils, classes, OpenGL, Hashes, Q3Pk3Read, q3types;
 
 const
   Rad = Pi / 180.0;
@@ -148,11 +148,13 @@ type TShaderManager = class(TCollection)
     function ReadShadersFromList(filename : string; list : TStringList; memorystream: TMemoryStream) : boolean; overload;
     function ScanAvailableShaders : boolean;
   public
+    TextureShader: array of TBSPTextureInfo;
     constructor Create(vPk3Zip: TZipPK3);
     destructor Destroy; override;
     function IndexOf(name : string) : integer;
     function ReadRequiredShaders : boolean;
     function LoadTexture(name : string;  NoPicMip, NoMipMap : boolean) : GLUINT;
+    function LoadSharedTexture(Index: integer): boolean;
 //    procedure SetLayer(ShaderID, StageID : integer);
     procedure SetState(ShaderID, StageID : integer);
 //    procedure SetMods(ShaderID, StageID : integer);
@@ -166,7 +168,8 @@ function Eval(wave : TWaveFunc) : single;
 
 implementation
 
-uses shaderValues, dialogs, textures, q3bsp, global, q3Timer, math3d, q3types, strutils;
+uses shaderValues, dialogs, textures, q3bsp, global, q3Timer, math3d, strutils,
+  q3Threads;
 
 function IsNumeric(s : string) : boolean;
 var i, l : integer;
@@ -436,6 +439,8 @@ begin
   FLoadedTextures := TIntegerHash.Create;
   FTempScript := TStringList.Create;
 
+  Setlength(TextureShader, 0);
+
   if not Assigned(vPk3Zip) then
     FPk3Zip := TZipPK3.Create(Q3_BASE_PATH, BSP_NAME)
   else
@@ -455,7 +460,7 @@ begin
             shaderNames.Add(name)
     //      LoadTexture(name, false, false);
         end;
-      ReadShadersFromList('script.shader', shaderNames);
+      //ReadShadersFromList('script.shader', shaderNames);
       //ReadRequiredShaders;
       shaderNames.Free;
     end
@@ -579,7 +584,7 @@ begin
           continue;
         end;
       end;
-      FAvailableShaders.SaveToFile('temps\scripts\AvailableShaders.txt');
+      // FAvailableShaders.SaveToFile('temps\scripts\AvailableShaders.txt');
       CloseFile(f);
       exit(FAvailableShaders.Count <> 0);
     end;
@@ -1109,7 +1114,7 @@ begin
   //end While
 
   params.Free;
-  result := true;
+  result := count > 0;
 end;
 
 function TShaderManager.ReadRequiredShaders : boolean;
@@ -1119,7 +1124,7 @@ var shaderFile, name, value : string;
 begin
   result := false;
   shaderNames := TStringList.Create;
-  Clear;
+  //Clear;
 
 try
   //LoadTGATexture('Initial', FGeneralTexture, true, false, false);
@@ -1159,10 +1164,11 @@ end;
     shaderNames.Duplicates := dupIgnore;
     for i := 0 to Count-1 do begin
       shaderNames.Add(Items[i].Name);
-      shaderNames.SaveToFile('temps\scripts\shaderitemname.txt');
+      //shaderNames.SaveToFile('temps\scripts\shaderitemname.txt');
     end;
     shaderNames.Free;
-
+    // q3Thread.drawgame := SHAREDLOADTEXTURE;
+    {
     if FPk3Zip.IsOpenIndex <> -1 then
     for i := 0 to Count-1 do begin
       if Items[i].qerImage <> '' then begin
@@ -1174,8 +1180,8 @@ end;
             for t := 0 to Items[i].Layers[j].numOfTextures-1 do begin
               if Copy(Items[i].Layers[j].TextureNames[t], 1, 1) <> '$' then begin // must be a texture name
                 if i mod 50 = 0 then
-                   name := {FPath + }Items[i].Layers[j].TextureNames[t];
-                name := {FPath + }Items[i].Layers[j].TextureNames[t];
+                   name := {FPath + }{Items[i].Layers[j].TextureNames[t];
+                name := {FPath + }{Items[i].Layers[j].TextureNames[t];
                 Items[i].Layers[j].TextureId[t] := LoadTexture(name, Items[i].NoPicMip, Items[i].NoMipMap);
                 if Items[i].Layers[j].TextureId[t] = 0 then
                   Items[i].Layers[j].TextureId[t] := Items[i].Layers[j].TextureId[t];
@@ -1197,6 +1203,7 @@ end;
         end;
       end;
     end;
+    }
   end;
   result := true;
 end;
@@ -1728,6 +1735,52 @@ begin
   lines.Free;
   params.Free;
   result := true;
+end;
+
+function TShaderManager.LoadSharedTexture(Index: integer): boolean;
+var
+  j, t: integer;
+  name: string;
+begin
+  if index >= Count then
+    begin
+      q3Thread.drawgame := BSPINIT;
+      exit;
+    end;
+  if FPk3Zip.IsOpenIndex <> -1 then
+    begin
+      if Items[Index].qerImage <> '' then begin
+        items[Index].qerId := LoadTexture(items[Index].qerImage, Items[Index].NoPicMip, Items[Index].NoMipMap);
+      end;
+      if Items[Index].numOfLayers > 0 then begin
+        for j := 0 to Items[Index].numOfLayers-1 do begin
+          if Items[Index].Layers[j].numOfTextures > 0 then begin
+            for t := 0 to Items[Index].Layers[j].numOfTextures-1 do begin
+              if Copy(Items[Index].Layers[j].TextureNames[t], 1, 1) <> '$' then begin // must be a texture name
+                if Index mod 50 = 0 then
+                   name := {FPath + }Items[Index].Layers[j].TextureNames[t];
+                name := {FPath + }Items[Index].Layers[j].TextureNames[t];
+                Items[Index].Layers[j].TextureId[t] := LoadTexture(name, Items[Index].NoPicMip, Items[Index].NoMipMap);
+                if Items[Index].Layers[j].TextureId[t] = 0 then
+                  Items[Index].Layers[j].TextureId[t] := Items[Index].Layers[j].TextureId[t];
+                FLoadedTextures[RemoveExt(name)] := Items[Index].Layers[j].TextureId[t];
+                Items[Index].Layers[j].UseLightmap := false;
+              end
+              else begin
+                Items[Index].Layers[j].UseLightmap := true;
+                if Items[Index].Layers[j].TextureNames[t] = '$lightmap' then
+                  FillChar(Items[Index].Layers[j].curColor, 4, 255)
+                else
+                  FillChar(Items[Index].Layers[j].curColor, 4, 128); // $identity
+              end;
+              // if no rgbGen is available then add $identity
+              if Items[Index].Layers[j].numOfrgbGen = 0 then
+                FillChar(Items[Index].Layers[j].curColor, 4, 255);
+            end;
+          end;
+        end;
+      end;
+    end;
 end;
 
 function TShaderManager.LoadTexture(name : string;  NoPicMip, NoMipMap : boolean) : GLUINT;

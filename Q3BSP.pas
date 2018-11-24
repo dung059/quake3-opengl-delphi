@@ -111,6 +111,7 @@ type
     // procedure DisplayErrors;
     function PlayerPosition: TBSPPosition; // position of the player
     function FindLeaf(vPos: TVector3f): integer;
+    procedure LoadTexture(index: integer);
     function LoadBSP(const Folder, FileName: String; inmemory: boolean): boolean;
     procedure RenderBSP(const Pos: TVector3f; leafIndex: integer);
     function checkMove(sp, ep, extent: TVector3f): TBSPMove;
@@ -130,7 +131,7 @@ implementation
 
 uses SysUtils, Textures, Global, q3timer, qsortunit, fmod, fmodtypes,
   fmoderrors, StrUtils,
-  ExtOpenGL, Q3Pk3Read;
+  ExtOpenGL, Q3Pk3Read, q3Threads;
 
 var
   fogBuffer: array of single;
@@ -769,6 +770,104 @@ begin
   *)
 end;
 
+procedure TQuake3BSP.LoadTexture(index: integer);
+  Function TextureInfoSame(TextureInfo1, TextureInfo2: TBSPTextureInfo): Boolean;
+  begin
+    Result := TextureInfo1.TextureName = TextureInfo2.TextureName;
+  end;
+var
+  i, j: integer;
+  shaderFile: string;
+  find: integer;
+begin
+  if index >= numOfTextures then
+    begin
+      q3Thread.drawgame := SHAREDLOADTEXTURE;
+      // q3Thread.drawgame := BSPINIT;
+      exit;
+    end;
+
+  find := -1;
+  for j := 0 to Length(ShaderManager.TextureShader) - 1 do
+    begin
+      if TextureInfoSame(TextureInfo[index], ShaderManager.TextureShader[j]) then
+      begin
+        TextureInfo[index] := ShaderManager.TextureShader[j];
+        find := j;
+        break;
+      end;
+     end;
+
+  if find = -1 then
+  begin
+    SetLength(ShaderManager.TextureShader, Length(ShaderManager.TextureShader) + 1);
+    ShaderManager.TextureShader[Length(ShaderManager.TextureShader) - 1] := TextureInfo[index];
+    if ShaderManager.TextureShader[Length(ShaderManager.TextureShader) - 1].TextureId = 0 then
+      ShaderManager.TextureShader[Length(ShaderManager.TextureShader) - 1].TextureId := FShaderManager.LoadTexture
+        (TextureInfo[index].TextureName, false, false);
+    TextureInfo[index] := ShaderManager.TextureShader[Length(ShaderManager.TextureShader) - 1];
+  end;
+    shaderFile := ShaderManager.AvailableShaders.Values
+      [TextureInfo[index].TextureName];
+    TextureInfo[index].shaderId := ShaderManager.IndexOf
+        (TextureInfo[index].TextureName);
+   if (shaderFile <> '')and(-1 <> TextureInfo[index].shaderId) then
+    begin
+      TextureInfo[index].surface := ShaderManager[TextureInfo[index].shaderId].surface;
+      TextureInfo[index].TextureId := ShaderManager[TextureInfo[index].shaderId].qerId;
+      // @@ NEW
+      if ShaderManager[TextureInfo[index].shaderId].IsSkyBox then
+      begin
+        skyboxShader := TextureInfo[index].shaderId;
+        if ShaderManager[TextureInfo[index].shaderId].SkyboxType = 2 then
+        begin
+          for j := 0 to 5 do
+            ShaderManager[skyboxShader].SkyboxTextureIds[j] :=
+              FShaderManager.LoadTexture(ShaderManager[skyboxShader]
+              .SkyboxTextureNames[j], false, true);
+        end;
+      end;
+    end;
+
+
+
+
+
+  exit;
+  for i := 0 to Length(ShaderManager.TextureShader) - 1 do
+    if ShaderManager.TextureShader[i].TextureId = 0 then
+      ShaderManager.TextureShader[i].TextureId := FShaderManager.LoadTexture
+        (ShaderManager.TextureShader[i].TextureName, false, false);
+  skyboxShader := -1;
+  for i := 0 to numOfTextures - 1 do
+  begin // Go through all of the textures
+    shaderFile := ShaderManager.AvailableShaders.Values
+      [TextureInfo[i].TextureName];
+    TextureInfo[i].shaderId := ShaderManager.IndexOf
+        (TextureInfo[i].TextureName);
+   if (shaderFile <> '')and(-1 <> TextureInfo[i].shaderId) then
+    begin
+      TextureInfo[i].surface := ShaderManager[TextureInfo[i].shaderId].surface;
+      TextureInfo[i].TextureId := ShaderManager[TextureInfo[i].shaderId].qerId;
+      // @@ NEW
+      if ShaderManager[TextureInfo[i].shaderId].IsSkyBox then
+      begin
+        skyboxShader := TextureInfo[i].shaderId;
+        if ShaderManager[TextureInfo[i].shaderId].SkyboxType = 2 then
+        begin
+          for j := 0 to 5 do
+            ShaderManager[skyboxShader].SkyboxTextureIds[j] :=
+              FShaderManager.LoadTexture(ShaderManager[skyboxShader]
+              .SkyboxTextureNames[j], false, true);
+        end;
+      end;
+    end
+    else
+      TextureInfo[i].TextureId := FShaderManager.LoadTexture
+        (TextureInfo[i].TextureName, false, false);
+  end;
+end;
+
 (*
   procedure TQuake3BSP.LoadEntities(var f:file;Lump:TBSPLump);
   var ents : array of char;
@@ -942,7 +1041,7 @@ begin
 
     s := GetTickCount();
     // Reset ShaderManager required list
-    //FShaderManager.RequiredShaders.Clear;
+    FShaderManager.RequiredShaders.Clear;
     for i := 0 to numOfTextures - 1 do
     begin // Go through all of the textures
       TextureInfo[i].TextureName :=
@@ -964,7 +1063,7 @@ begin
             .TextureName);
       end;
     end;
-    FShaderManager.RequiredShaders.SaveToFile('temps\scripts\RequiredShaders.txt');
+    //FShaderManager.RequiredShaders.SaveToFile('temps\scripts\RequiredShaders.txt');
     Cons.AddMsg('Required shaders = ' +
       IntToStr(ShaderManager.RequiredShaders.Count));
     // for i := 0 to ShaderManager.RequiredShaders.Count-1 do
@@ -1231,7 +1330,10 @@ begin
     exit;
   end;
 
+  {
+  // TODO: boi vi opengl chi 1 thread nen loadtexture se chuyen sang thread chinh
   // assign shaderId
+
   skyboxShader := -1;
   for i := 0 to numOfTextures - 1 do
   begin // Go through all of the textures
@@ -1260,6 +1362,7 @@ begin
       TextureInfo[i].TextureId := FShaderManager.LoadTexture
         (TextureInfo[i].TextureName, false, false);
   end;
+  }
 
   // LUMP 13: FACES ************************************************************
   try

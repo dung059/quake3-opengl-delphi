@@ -1,8 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<Transactions>
-    <Transaction>2018/10/18 19:09:29.000.610,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapView.dproj=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapViewModify.dproj</Transaction>
-  </Transactions>  <ProjectSortOrder AutoSort="0" SortType="0">
+    <Transaction>2018/10/18 19:09:29.000.610,D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapViewModify.dproj=D:\DUNG\project\delphi\OpenGL\Quake3\quake3source\Q3MapView.dproj</Transaction>
+  </Transactions>
+	<ProjectSortOrder AutoSort="0" SortType="0">
     <File Path="Bass.pas"/>
     <File Path="Cam.pas"/>
     <File Path="Console.pas"/>

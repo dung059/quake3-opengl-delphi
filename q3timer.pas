@@ -12,6 +12,7 @@ type THiResTimer = class(TObject)
     TotalTime  : double; // time since app started
     FrameTime : double; // time elapsed since last frame
     Frames    : cardinal; // total number of frames
+    ElapsedTime : Integer;
     constructor Create;
     function Refresh : cardinal;
     function GetFPS : integer;
@@ -37,6 +38,7 @@ begin
   t2 := tmp-FoldTime;
   frameTime := t2/FFrequency;
   TotalTime := TotalTime + frameTime;
+  ElapsedTime := (FoldTime + tmp) div 2;
   FoldTime := tmp;
   inc(Frames);
   result := Frames;

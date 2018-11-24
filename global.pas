@@ -56,7 +56,7 @@ type
 var
   h_Wnd: HWND; // Global window handle
   h_DC: HDC; // Global device context
-  h_RC: HGLRC; // OpenGL rendering context
+  h_RC, glrc1: HGLRC; // OpenGL rendering context
 
   Q3Level: TQuake3BSP;
   Sound: TSoundEngine;
@@ -79,6 +79,7 @@ var
   // DumpErrors : boolean = false;
 
   CubeTex, BackgroundTex: GLuint;
+  ProgressTex, Imagetextlogo: glUint;
   Pause: Boolean = false;
   SortFaces: Boolean = true;
   LockingAvailable: Boolean = false;
@@ -159,6 +160,7 @@ const
 function CheckExtensions: Boolean;
 function IndexofMaps(findstr: String; Inlist: TStringList): Integer;
 function findcommand(command: string; findin: String): Boolean;
+function myglGenTextures(pname: GLenum; params: PGLuint): GLuint;
 procedure LoadRailgun;
 procedure drawORGLine();
 
@@ -177,6 +179,16 @@ function CheckExtensions: Boolean;
 begin
   MultiTexture := GL_ARB_multitexture;
   result := true;
+end;
+
+function myglGenTextures(pname: GLenum; params: PGLuint): GLuint;
+var
+  Texture : GLuint;
+begin
+  glEnable (GL_TEXTURE_2D);
+  glGenTextures(1, @Texture);
+  glBindTexture(GL_TEXTURE_2D, Texture);
+  Result := Texture;
 end;
 
 function findcommand(command: string; findin: String): Boolean;
@@ -570,6 +582,11 @@ MUSIC_VOL := ini.ReadInteger('Sound', 'MusicVolume', 64);
 FX_VOL := ini.ReadInteger('Sound', 'FXVolume', 64);
 // DumpErrors := ini.ReadBool('Debug', 'DumpErrors', false);
 ini.Free;
+
+  //LoadTexture('cube.bmp', CubeTex, false);
+  LoadTexture('temps/images/freewill.jpg', Imagetextlogo, false, false);
+  LoadTexture('temps/images/volitionlogo.jpg', ProgressTex, false, false);
+  LoadTexture('temps/images/chrome.jpg', BackgroundTex, false, false);
 
 // có thể sửa để thêm nhiều đường dẫn đến thư mục chứa data
 // LoadAllBSPmaps(QUAKE_FOLDER, false);

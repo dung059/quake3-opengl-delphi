@@ -260,12 +260,7 @@ begin
     BSP_NAME := Pk3Zip.BSP_LIST.Strings[StrToInt(inputs)];
     //BSP_NAME := LIST_BSP_NAME.Strings[Random(LIST_BSP_NAME.Count - 1)];
     Camera.ResetPosition;
-    Drawgame := FLASHINIT;
-    with TQ3Thread.Create(true) do
-      begin
-        SetFunc('Q3LevelLoad');
-        Resume;
-      end;
+    q3Thread.SetFunc('', 'BSPLoadQ3');
     ShowCursor(false);
     //end;
   end;
@@ -317,94 +312,23 @@ begin
   end;
 end;
 
-procedure SplashScreen(h_dc : HDC);
-begin
-    // begin render
-    glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);    // Clear The Screen And The Depth Buffer
-    glLoadIdentity();                                       // Reset The View
-
-    glDisable(GL_CULL_FACE);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glPushAttrib(GL_ALL_ATTRIB_BITS);
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix;
-    glLoadIdentity;
-
-    glDisable(GL_DEPTH_TEST);                                                     // Disables Depth Testing
-
-    glOrtho(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, -1, 1);                                    // Set Up An Ortho Screen
-    glMatrixMode(GL_MODELVIEW);                                                   // Select The Modelview Matrix
-    glPushMatrix();
-    glLoadIdentity();
-
-    // RenderBackground;
-
-    glColor4f(1, 1, 1, 1);
-
-    //TEXTURE LAYER 0
-    if GL_ARB_multitexture then
-      glActiveTextureARB(GL_TEXTURE0_ARB);
-    GLBindTexture(GL_TEXTURE_2D, splashId);
-//    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-    glEnable(GL_TEXTURE_2D);
-    //TEXTURE LAYER 1
-    if GL_ARB_multitexture then
-      glActiveTextureARB(GL_TEXTURE1_ARB);
-    glDisable(GL_TEXTURE_2D);
-
-    glBegin(GL_QUADS);
-      //1
-    if GL_ARB_multitexture then
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0, 0);
-    glVertex2i(0, 0);
-    glColor4f(1, 1, 1, 1);
-      //2
-    if GL_ARB_multitexture then
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 1, 0);
-    glVertex2i(SCREEN_WIDTH, 0);
-    glColor4f(1, 1, 1, 1);
-      //3
-    if GL_ARB_multitexture then
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 1, 1);
-    glVertex2i(SCREEN_WIDTH, SCREEN_HEIGHT);
-    glColor4f(1, 1, 1, 1);
-      //4
-    if GL_ARB_multitexture then
-      glMultiTexCoord2fARB(GL_TEXTURE0_ARB, 0, 1);
-    glVertex2i(0, SCREEN_HEIGHT);
-    glColor4f(1, 1, 1, 1);
-    glEnd;
-
-    glPopMatrix;
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix;
-    glPopAttrib;
-    glMatrixMode(GL_MODELVIEW);
-
-    //FixedFont.TextOut(1,1, 'Loading...');
-    glFinish;
-    //SwapBuffers(h_DC);
-    //DrawIt := true;
-    //exit;
-end;
-
 procedure glDraw(h_dc : HDC);
 begin
-  if gTimer <> nil then
+  // if gTimer <> nil then
     gTimer.Refresh;
 
-  case drawgame of
+  case q3Thread.drawgame of
   FLASHINIT:
     begin
       FlashglInit();
+      q3Thread.drawgame := FLASHDRAW;
+      q3Thread.BSPtextureLoađInex := 0;
+      q3Thread.SharedtextureLoađInex := 0;
     end;
-   FLASHDRAW:
+   FLASHDRAW, BSPLOADTEXTURE, FLASHQ3LOAD, SHAREDLOADTEXTURE:
       begin
         FlashglDraw();  // tam on
-        //SplashScreen(h_dc);  // very slow
+        ShowCursor(true);
       end;
     BSPINIT:
       glInit();
@@ -417,9 +341,12 @@ begin
 
              Sound.Update(Camera.Position);
              Frust.CalculateFrustum;
+
              currentLeaf := Q3Level.FindLeaf(Camera.Position);
              Q3Level.RenderBSP(Camera.Position, currentLeaf);
+             Player.Draw(ElapsedTime/1000);
 
+             {
              glPushMatrix;
                glScalef(0.3, 0.3, 0.3);
                glTranslatef(60, -40, 0);
@@ -430,6 +357,7 @@ begin
                glRotatef(Camera.move_mouse_click_y, 0, 0, 1);
                Player.Draw(ElapsedTime/1000);
              glPopMatrix;
+             }
 
              if Cons.Visible or Cons.ShowStats then begin
                with camera do begin
@@ -440,21 +368,20 @@ begin
                Cons.TextOut(45, 1, Format('FPS: %6d%6d%6.2f (SND)', [TimedFPS ,gTimer.GetAverageFPS, Sound.CPU_Usage]));
                Cons.TextOut(45, 2, Format('MAP: %6d%6d%6d%6d', [VisibleTriangles, numSolid, numAdditive, numTransparent]));
                Cons.TextOut(45, 3, Format('BSP: %6d%6d%6d%6d%6d (t,r,p,f,c)', [BSPLeaves, renderedLeaves, PVSLeaves, frustumLeaves, currentLeaf]));
-
                // Log
                Cons.Display;
              end;
 
-             drawORGLine();
+             // drawORGLine();
         end;
 
   end;
 
 
   SwapBuffers(h_DC);
-  endTime := gTimer.GetTime;
+  //endTime := gTimer.GetTime;
 
-  RenderTime := gTimer.DiffTime(startTime, endTime);
+  //RenderTime := gTimer.DiffTime(startTime, endTime);
 
 
 end;
@@ -462,9 +389,6 @@ end;
 procedure glInit();
 var snd, channel : integer;
 begin
-  if not Assigned(gTimer) then
-    gTimer := THiResTimer.Create;
-
   // load all other init first
 
   lastKeyPress := GetTickCount;
@@ -472,11 +396,11 @@ begin
   //DrawIt := true;
   ShowInitial;
 
-  if drawgame in [BSPINIT] then
+  if q3Thread.drawgame in [BSPINIT] then
     begin
       glClearColor(0.0, 0.0, 0.0, 0.0); 	   // Black Background
       glShadeModel(GL_SMOOTH);                 // Enables Smooth Color Shading
-      glClearDepth(1);                         // Depth Buffer Setup
+      glClearDepth(1.0);                         // Depth Buffer Setup
       glEnable(GL_DEPTH_TEST);                 // Enable Depth Buffer
       glDepthFunc(GL_LEQUAL);	           // The Type Of Depth Test To Do
 
@@ -485,19 +409,22 @@ begin
 
       glCullFace(GL_FRONT);
       glEnable(GL_CULL_FACE);
-      glEnable(GL_TEXTURE_2D);                 // Enable Texture Mapping
       glEnable(GL_BLEND);                 // Enable Texture Mapping
+      glEnable(GL_TEXTURE_2D);                 // Enable Texture Mapping
+      //glDisable(GL_BLEND);
       glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
       checkthread := false;
 
       glResizeWnd(SCREEN_WIDTH, SCREEN_HEIGHT); // DOV !!!!!
+      //if drawgame = FLASHDRAW then
+      q3Thread.drawgame := BSPDRAW;
   end;
       // OpenGL initialized and viewport is set  splashName := IncludeTrailingPathDelimiter(ExtractFilePath(QUAKE_FOLDER));
-  if drawgame = BSPDRAW then    //   BSPDRAW đã load trong thread
+  if q3Thread.drawgame = BSPDRAW then    //   BSPDRAW đã load trong thread
     begin
-      splashName := 'levelshots\' + ChangeFileExt(BSP_NAME, '.jpg');
-      splashId := ShaderManager.LoadTexture(splashName, false, false);
+      // splashName := 'levelshots\' + ChangeFileExt(BSP_NAME, '.jpg');
+      // splashId := ShaderManager.LoadTexture(splashName, false, false);
       // glDraw(h_DC);
 
       Camera.screenlock := true;
@@ -508,8 +435,8 @@ begin
       if not Q3Level.LoadBSP('' , BSP_NAME, true) then PostQuitMessage(0);
 
       Player.LoadPlayer('models\players\anarki', 'default');
-      Player.SetAnim(0);
       //LoadRailgun;
+      }
 
       with Q3Level.PlayerPosition do begin
         Camera.Init(FOV, SCREEN_WIDTH, SCREEN_HEIGHT, 1, 1, Angle);
@@ -518,8 +445,7 @@ begin
         Camera.position.Z := Position.z + 0;
         Camera.ApplyCamera;
       end;
-      }
-      currentLeaf := Q3Level.FindLeaf(Camera.Position);
+
       SetCursorPos((SCREEN_WIDTH  DIV 2) + SCREEN_LEFT, (SCREEN_HEIGHT DIV 2) + SCREEN_TOP);
     end;
 
@@ -528,24 +454,25 @@ end;
 
 procedure glResizeWnd(Width, Height : Integer);
 begin
-  if (Height = 0) then                // prevent divide by zero exception
-    Height := 1;
-  glViewport(0, 0, Width, Height);    // Set the viewport for the OpenGL window
-  glMatrixMode(GL_PROJECTION);        // Change Matrix Mode to Projection
-  glLoadIdentity();                   // Reset View
-//  gluPerspective(FOV, Width/Height, 1.0, DEPTH_OF_VIEW);  // Do the perspective calculations. Last value = max clipping depth
-  if drawgame = FLASHDRAW then
-    gluPerspective(FOV, Width/Height, 1.0, 300);  // Do the perspective calculations. Last value = max clipping depth
-  if drawgame in [FLASHINIT, BSPDRAW, BSPINIT] then
-    gluPerspective(FOV, Width/Height, 1.0, DEPTH_OF_VIEW);  // Do the perspective calculations. Last value = max clipping depth
-//  PerspectiveGL(FOV, Width/Height, 4.0, DEPTH_OF_VIEW);
-//   glFrustum(-4.0, 4.0, -2.704225, 2.704225, 4.0, 4096.0);  //GLQuake Mode
+  case q3Thread.drawgame of
+    FLASHINIT, FLASHQ3LOAD, FLASHDRAW: FlashglResizeWnd(Width, Height);
+  else begin
+      if (Height = 0) then                // prevent divide by zero exception
+        Height := 1;
+      glViewport(0, 0, Width, Height);    // Set the viewport for the OpenGL window
+      glMatrixMode(GL_PROJECTION);        // Change Matrix Mode to Projection
+      glLoadIdentity();                   // Reset View
+        gluPerspective(FOV, Width/Height, 1.0, DEPTH_OF_VIEW);  // Do the perspective calculations. Last value = max clipping depth
+    //  PerspectiveGL(FOV, Width/Height, 4.0, DEPTH_OF_VIEW);
+    //   glFrustum(-4.0, 4.0, -2.704225, 2.704225, 4.0, 4096.0);  //GLQuake Mode
 
-  SCREEN_WIDTH  := Width;
-  SCREEN_HEIGHT := Height;
+      SCREEN_WIDTH  := Width;
+      SCREEN_HEIGHT := Height;
 
-  glMatrixMode(GL_MODELVIEW);         // Return to the modelview matrix
-  glLoadIdentity();                   // Reset View
+      glMatrixMode(GL_MODELVIEW);         // Return to the modelview matrix
+      glLoadIdentity();                   // Reset View
+    end;
+  end; // end case
 end;
 
 procedure CheckCollision(sp, ep : TVector3f); // oldPos, Camera.Position
@@ -634,7 +561,7 @@ begin
         Result := 0
       end;
     WM_SHOWWINDOW:
-      drawgame := FLASHDRAW;
+      q3Thread.drawgame := FLASHDRAW;
     WM_KEYDOWN:       // Set the pressed key (wparam) to equal true so we can check if its pressed
       begin
         keys[wParam] := True;
@@ -670,7 +597,20 @@ begin
             DumpMsg := 'PAUSE (press ''P'' to continue)'//+ IntToStr(FPScount)
           else
             DumpMsg := '';
-          if Assigned(Pk3Zip) then
+          if q3Thread.drawgame in [FLASHINIT, FLASHQ3LOAD, FLASHDRAW] then
+            SetWindowText(h_Wnd, PChar(WND_TITLE + '   [' + intToStr(gTimer.GetFPS) + ' FPS]' +
+                '   Time : ' + intToStr(gTimer.ElapsedTime DIV 1000) + '.' + intToStr(gTimer.ElapsedTime MOD 1000) +
+                ' [ElapsedTime] - ' + intToStr(gTimer.ElapsedTime)) );
+          if q3Thread.drawgame in [BSPLOADTEXTURE] then
+            SetWindowText(h_Wnd, PChar(WND_TITLE + '   [' + intToStr(gTimer.GetFPS) + ' FPS]' +
+                '   BSPLOADTEXTURE :  + ShaderManager.TextureShader[q3Thread.textureLoađInex].TextureName' +
+                IntToStr(q3Thread.BSPtextureLoađInex) ) );
+          if q3Thread.drawgame in [SHAREDLOADTEXTURE] then
+            SetWindowText(h_Wnd, PChar(WND_TITLE + '   [' + intToStr(gTimer.GetFPS) + ' FPS]' +
+                '   SHAREDLOADTEXTURE :  + ShaderManager.TextureShader[q3Thread.textureLoađInex].TextureName' +
+                IntToStr(q3Thread.SharedtextureLoađInex) ) );
+          if q3Thread.drawgame in [BSPINIT, BSPDRAW] then
+            if Assigned(Pk3Zip) then
             SetWindowText(h_Wnd, PChar(WND_TITLE + format(
                 '[%s index: %d\%d | FPS: %d, rot(X/Y: %0.8f-%0.8f) CAM(%0.8f|%0.8f|%0.8f) VIEW(%0.8f|%0.8f|%0.8f)]',
                 [BSP_NAME, Pk3Zip.BSP_LIST.IndexOf(BSP_NAME), Pk3Zip.BSP_LIST.Count - 1, gTimer.GetFPS,
@@ -735,9 +675,6 @@ begin
       BASS_StreamFree(Sound.Stream[i]);     // Free the stream
   BASS_Free;
 
-//  if Assigned(Player) then
-//    FreeAndNil(Player);
-
   if Fullscreen then begin            // Change back to non fullscreen
     //Loaded := false;
     ChangeDisplaySettings(devmode(nil^), 0);
@@ -749,6 +686,7 @@ begin
   if (not wglMakeCurrent(h_DC, 0)) then
     MessageBox(0, 'Release of DC and RC failed!', 'Error', MB_OK or MB_ICONERROR);
 
+  //wglDeleteContext(glrc1);
   // Attempts to delete the rendering context
   if (not wglDeleteContext(h_RC)) then begin
     MessageBox(0, 'Release of rendering context failed!', 'Error', MB_OK or MB_ICONERROR);
@@ -919,7 +857,10 @@ begin
   end;
 
   // Create a OpenGL rendering context
+
+  //glrc1 := wglCreateContext(h_DC);
   h_RC := wglCreateContext(h_DC);
+  wglShareLists(h_RC, glrc1); // see: https://www.khronos.org/opengl/wiki/OpenGL_and_multithreading
   if (h_RC = 0) then begin
     glKillWnd(Fullscreen);
     MessageBox(0, 'Unable to create an OpenGL rendering context', 'Error', MB_OK or MB_ICONERROR);
@@ -934,6 +875,7 @@ begin
     Result := False;
     Exit;
   end;
+  //wglMakeCurrent(h_DC, glrc1); // LoadTexturesOnTheFly();
   //ReadExtensions;
   //ReadImplementationProperties;
   CheckExtensions;
@@ -1007,16 +949,9 @@ begin
 //        Camera.MoveCameraByMouse; // ShowCursor(false);
 //      end;// else ShowCursor(true);
 
-      if drawgame = FLASHINIT then
-        with TQ3Thread.Create(true) do
-          begin
-            SetFunc('InitLoad');
-            Resume;
-          end;
-
       if (GetForegroundWindow = h_Wnd) then
         begin
-          if drawgame = BSPDRAW then
+          if q3Thread.drawgame = BSPDRAW then
             begin
               //ShowCursor(false);
               Camera.MoveCameraByMouse;
@@ -1033,7 +968,7 @@ begin
          Camera.Update(gTimer.FrameTime);
          newPos := Camera.position;
          glDraw(h_dc);                           // Draw the scene
-         if TestCollision and not skipNextMove and (Drawgame = BSPDRAW) then
+         if TestCollision and not skipNextMove and (q3Thread.Drawgame = BSPDRAW) then
            CheckCollision(oldPos, newPos);
          //skipNextMove := false;
       end;
@@ -1056,6 +991,13 @@ end;
 
 procedure startmap();
 begin
+  if not Assigned(gTimer) then
+    gTimer := THiResTimer.Create;
+  q3Thread := Tq3Thread.Create;
+  q3Thread.SetFunc('', 'InitLoad');
+
+  //startTime := gTimer.GetTime;
+
   if not Assigned(Camera) then
     Camera := TCamera.Create;
   Camera.max_speed := CAM_SPEED;
@@ -1079,6 +1021,8 @@ begin
     Sound.Free;
   if Assigned(frust) then
     frust.Free;
+  if Assigned(q3Thread) then
+    q3Thread.Free;
 end;
 
 begin

@@ -171,6 +171,8 @@ begin
   if inmemory then
     begin
       fs := Pk3Zip.GetFileBytes(name);
+      if fs = nil then
+        exit;
       GetMem(memp, fs.size);
       fs.Read(memp^, fs.Size);
       Stream1 := BASS_StreamCreateFile(true, memp, 0, fs.Size, 0);

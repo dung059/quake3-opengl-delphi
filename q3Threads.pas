@@ -1,48 +1,58 @@
-unit q3Threads;
+﻿unit q3Threads;
 
 interface
 
 uses
-  Windows, WinInet, System.Classes, global;
+  Windows, WinInet, System.Classes, global, Winapi.OpenGL;
 
 type
-  Tdrawtypes = (FLASHINIT, FLASHDRAW, BSPINIT, BSPDRAW, DRAWLOAD, DRAWTEST,
+  Tdrawtypes = (FLASHINIT, FLASHQ3LOAD, FLASHDRAW, // for load flash when load
+                BSPINIT, BSPLOADTEXTURE, SHAREDLOADTEXTURE, BSPDRAW, DRAWLOAD, DRAWTEST,
     DRAWNONE, DRAWMENU);
 
   TThreadStatus = (ACTIVE, INACTIVE, SUCCESS);
 
-  TQ3Thread = class(TThread)
+  TQ3FunctionThread = class(TThread)
   private
     fFunc: String;
     FileURL, LocalFileName: string;
+    texIndex: GLuint;
     function CreateRecID(P: Pointer): DWord; stdcall;
-    function GetInetFile(const FileURL, FileName: String): Boolean;
+    function GetInetFile(const FileURL, FileName: String): boolean;
+    function myglGenTextures(): GLuint;
     procedure GetFileFromInternet(URL, LocalFName: String);
     procedure InitLoadQ3();
     procedure BSPLoadQ3();
   public
-    constructor Create(CreateSuspended: Boolean);
-    // destructor Destroy; override;
+    constructor Create(filename, _fn: string);
+    //destructor Destroy; override;
 
-    procedure SetFunc(func: String);
   protected
     procedure Execute; override;
   end;
 
+  TQ3Thread = class
+  private
+    status: Boolean;
+    procedure ThreadDone(Sender: TObject);
+  public
+    drawgame: Tdrawtypes;
+    BSPtextureLoađInex, SharedtextureLoađInex: integer;
+    procedure SetFunc(filename, func: String);
+  end;
+
 var
   ThreadStatus: TThreadStatus;
-  // q3Thread: TQ3Thread;
-  drawgame: Tdrawtypes;
+  q3Thread: TQ3Thread;
 
 implementation
 
 { Q3Thread }
 
 uses
-  System.SysUtils, Q3Pk3Read, Frustum, q3shaders, Cam, Q3BSP, Console,
-  Winapi.OpenGL, q3sound, math3d;
+  System.SysUtils, Q3Pk3Read, Frustum, q3shaders, Cam, Q3BSP, Console, q3sound, math3d;
 
-procedure TQ3Thread.BSPLoadQ3;
+procedure TQ3FunctionThread.BSPLoadQ3;
 begin
   splashName := 'levelshots\' + ChangeFileExt(BSP_NAME, '.jpg');
   splashId := ShaderManager.LoadTexture(splashName, false, false);
@@ -67,33 +77,27 @@ begin
     Camera.position.Z := position.Z + 0;
     Camera.ApplyCamera;
   end;
-  // currentLeaf := Q3Level.FindLeaf(Camera.Position);
 
+  currentLeaf := Q3Level.FindLeaf(Camera.position);
   SetCursorPos((SCREEN_WIDTH DIV 2) + SCREEN_LEFT, (SCREEN_HEIGHT DIV 2) +
     SCREEN_TOP);
-  //drawgame := BSPDRAW;
-  drawgame := BSPINIT;
+  // drawgame := BSPDRAW;
+  if q3Thread.drawgame = FLASHDRAW then
+    q3Thread.drawgame := BSPLOADTEXTURE;
 end;
 
-constructor TQ3Thread.Create(CreateSuspended: Boolean);
+constructor TQ3FunctionThread.Create(filename, _fn: string);
 begin
-  inherited Create(CreateSuspended);
+  inherited Create(false);
 
   FileURL := '';
-  LocalFileName := '';
+  LocalFileName := filename;
+
+  fFunc := _fn;
+  FreeOnTerminate:=True;
 end;
 
-{ destructor TQ3Thread.Destroy;
-  begin
-  //WaitFor; // Wait for the process to stop before we continue freeing things...
-  if fFunc = 'Q3LevelLoad' then
-  Drawgame := BSPINIT;
-  ThreadStatus := SUCCESS;
-  inherited;
-  end;
-}
-
-function TQ3Thread.CreateRecID(P: Pointer): DWord; stdcall;
+function TQ3FunctionThread.CreateRecID(P: Pointer): DWord; stdcall;
 { ------------------------------------------------------------------ }
 { Download Thread }
 { ------------------------------------------------------------------ }
@@ -108,13 +112,26 @@ begin
   end;
 end;
 
-procedure TQ3Thread.Execute;
+function TQ3FunctionThread.myglGenTextures(): GLuint;
+var
+  Texture : GLuint;
+begin
+  glEnable (GL_TEXTURE_2D);
+  glGenTextures(1, @Texture);
+  glBindTexture(GL_TEXTURE_2D, Texture);
+  Result := Texture;
+end;
+
+
+procedure TQ3FunctionThread.Execute;
+var Texture : GLuint;
 begin
   inherited;
   while not Terminated do
   begin
     if fFunc = '' then
       Terminate;
+      // Continue;
     if fFunc = 'GetInetFile' then
     begin
       ThreadStatus := ACTIVE;
@@ -131,20 +148,39 @@ begin
     begin
       InitLoadQ3;
       BSPLoadQ3();
-      Terminate;
     end;
 
-    if fFunc = 'Q3LevelLoad' then
+    if fFunc = 'BSPLoadQ3' then
     begin
       BSPLoadQ3;
-      Terminate;
     end;
+    if fFunc = 'opengl' then
+    begin
+      glGenTextures(1, @Texture);
+      glBindTexture(GL_TEXTURE_2D, Texture);
+      Texture := myglGenTextures()
+    end;
+    if fFunc = 'openglloadtexture' then
+    begin
+      //tex.LoadTextureData(@tex.texture[texIndex],fn);
+    end;
+    if fFunc = 'Playerload' then
+    begin
+      Player.LoadPlayer(LocalFileName, 'default');
+      Player.SetAnim(0);
+    end;
+    if fFunc = 'scanshared' then
+    begin
+    end;
+
     Sleep(1); // This keeps the thread from going crazy and maxing the processor...
+    fFunc := '';
   end;
+      //Terminate;
   // Destroy;
 end;
 
-procedure TQ3Thread.GetFileFromInternet(URL, LocalFName: String);
+procedure TQ3FunctionThread.GetFileFromInternet(URL, LocalFName: String);
 { ------------------------------------------------------------------ }
 { Function to get a file from the internet using HTTP }
 { ------------------------------------------------------------------ }
@@ -162,7 +198,7 @@ begin
       MB_OK or MB_ICONERROR);
 end;
 
-function TQ3Thread.GetInetFile(const FileURL, FileName: String): Boolean;
+function TQ3FunctionThread.GetInetFile(const FileURL, FileName: String): boolean;
 { ------------------------------------------------------------------ }
 { Creates a thread that downloads a texture from the internet }
 { ------------------------------------------------------------------ }
@@ -217,7 +253,7 @@ begin
   end
 end;
 
-procedure TQ3Thread.InitLoadQ3;
+procedure TQ3FunctionThread.InitLoadQ3;
 begin
   Pk3Zip := TZipPK3.Create(Q3_BASE_PATH, BSP_NAME);
   // Pk3Zip.IndexOf(BSP_NAME);
@@ -234,61 +270,71 @@ begin
   Q3Level.ShaderManager := ShaderManager;
   Q3Level.Camera := Camera;
 
-    if not Assigned(Cons) then
-    begin
-      Cons := TConsole.Create(SCREEN_WIDTH, SCREEN_HEIGHT);
-      Cons.AddMsg('OpenGL vendor ' + glGetString(GL_VENDOR));
-      Cons.AddMsg('OpenGL renderer ' + glGetString(GL_RENDERER));
-      Cons.AddMsg('OpenGL version ' + glGetString(GL_VERSION));
-      Cons.AddMsg('Supported OpenGL extensions ' + glGetString(GL_EXTENSIONS));
-    end;
-    if not Assigned(Sound) then
-    begin
-      Sound := TSoundEngine.Create;
-      // load walk sound
-      Camera.NormalSound := Sound.LoadSample
-        ('\sound\player\footsteps\step1.wav', false, false);
-      Camera.Channel := Sound.NewEmitter(Camera.NormalSound, SetVector(0, 0, 0),
-        false, True);
-      Camera.MetalSound := Sound.LoadSample
-        ('\sound\player\footsteps\clank1.wav', false, false);
-      Camera.WaterSound := Sound.LoadSample
-        ('\sound\player\footsteps\splash1.wav', false, false);
-      // fmod
-      Sound.LoadSample('\sound\player\footsteps\step2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\step3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\step4.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\clank4.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash2.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash3.wav', false, false);
-      Sound.LoadSample('\sound\player\footsteps\splash4.wav', false, false);
-      // bass
-      Sound.LoadSample(false, '\sound\player\footsteps\step2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\step3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\step4.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\clank4.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash2.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash3.wav');
-      Sound.LoadSample(false, '\sound\player\footsteps\splash4.wav');
-      Camera.NormalSound := Sound.LoadSample(false,
-        '\sound\player\footsteps\step1.wav');
-      Camera.MetalSound := Sound.LoadSample(false,
-        '\sound\player\footsteps\clank1.wav');
-      Camera.WaterSound := Sound.LoadSample(false,
-        '\sound\player\footsteps\splash1.wav');
-    end;
-  //drawgame := BSPINIT;
+  if not Assigned(Cons) then
+  begin
+    Cons := TConsole.Create(SCREEN_WIDTH, SCREEN_HEIGHT);
+    Cons.AddMsg('OpenGL vendor ' + glGetString(GL_VENDOR));
+    Cons.AddMsg('OpenGL renderer ' + glGetString(GL_RENDERER));
+    Cons.AddMsg('OpenGL version ' + glGetString(GL_VERSION));
+    Cons.AddMsg('Supported OpenGL extensions ' + glGetString(GL_EXTENSIONS));
+  end;
+  if not Assigned(Sound) then
+  begin
+    Sound := TSoundEngine.Create;
+    // load walk sound
+    Camera.NormalSound := Sound.LoadSample('\sound\player\footsteps\step1.wav',
+      false, false);
+    Camera.Channel := Sound.NewEmitter(Camera.NormalSound, SetVector(0, 0, 0),
+      false, True);
+    Camera.MetalSound := Sound.LoadSample('\sound\player\footsteps\clank1.wav',
+      false, false);
+    Camera.WaterSound := Sound.LoadSample('\sound\player\footsteps\splash1.wav',
+      false, false);
+    // fmod
+    Sound.LoadSample('\sound\player\footsteps\step2.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\step3.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\step4.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\clank2.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\clank3.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\clank4.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\splash2.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\splash3.wav', false, false);
+    Sound.LoadSample('\sound\player\footsteps\splash4.wav', false, false);
+    // bass
+    Sound.LoadSample(false, '\sound\player\footsteps\step2.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\step3.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\step4.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\clank2.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\clank3.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\clank4.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\splash2.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\splash3.wav');
+    Sound.LoadSample(false, '\sound\player\footsteps\splash4.wav');
+    Camera.NormalSound := Sound.LoadSample(false,
+      '\sound\player\footsteps\step1.wav');
+    Camera.MetalSound := Sound.LoadSample(false,
+      '\sound\player\footsteps\clank1.wav');
+    Camera.WaterSound := Sound.LoadSample(false,
+      '\sound\player\footsteps\splash1.wav');
+  end;
+  // drawgame := BSPINIT;
 end;
 
-procedure TQ3Thread.SetFunc(func: String);
+{ TQ3Thread }
+
+procedure TQ3Thread.SetFunc(filename, func: String);
 begin
-  fFunc := func;
-  if func = 'abc' then
-    fFunc := func;
+  //  if func = 'InitLoad' then
+  //    with TQ3FunctionThread.Create(0, func) do
+  //      OnTerminate := ThreadDone;
+  with TQ3FunctionThread.Create(filename, func) do
+    OnTerminate := ThreadDone;
+  q3Thread.drawgame := FLASHINIT;
+end;
+
+procedure TQ3Thread.ThreadDone(Sender: TObject);
+begin
+  status := false;
 end;
 
 initialization

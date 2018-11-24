@@ -143,7 +143,11 @@ begin
     begin
       Index := Items[IsOpenIndex].IndexOf(Items[IsOpenIndex].FileNames[Index].Full);
       if Index <> -1 then
-        fZipFile.Read(Items[IsOpenIndex].FileNames[Index].Full, Bytes);
+        begin
+          //fZipFile.Close;
+          //fZipFile.Open(Items[IsOpenIndex].Pk3FileName, zmRead);
+          fZipFile.Read(Items[IsOpenIndex].FileNames[Index].Full, Bytes);
+        end;
       if length(Bytes) > 0 then
       begin
         result := TMemoryStream.Create;
